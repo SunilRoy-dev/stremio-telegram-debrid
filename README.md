@@ -100,7 +100,7 @@ Configure these settings in your deployment dashboard or local `.env` file:
 | :--- | :---: | :--- |
 | `API_ID` | **Yes** | Your Telegram API ID from [my.telegram.org](https://my.telegram.org). |
 | `API_HASH` | **Yes** | Your Telegram API Hash from [my.telegram.org](https://my.telegram.org). |
-| `TELEGRAM_CHANNEL_ID` | **Yes** | Comma-separated list of private channel IDs (e.g. `-1001234567890`). |
+| `TELEGRAM_CHANNEL_ID` | **Yes** | Comma-separated list of private/public channel IDs or usernames (e.g. -1001234567890, @my_channel). |
 | `BOT_TOKEN` | **Conditional** | Bot Token from `@BotFather` (required if `USER_SESSION_STRING` is not configured). |
 | `USER_SESSION_STRING` | **Conditional** | Pyrogram Session String (highly recommended to bypass bot limits, see details below). |
 | `API_KEY` | No | Add a secret key (e.g. `mykey123`) to secure your addon endpoint with `?api_key=mykey123`. |
@@ -154,6 +154,26 @@ async def run():
 asyncio.run(run())
 "
 ```
+
+---
+
+## Configuring Channels (Private & Public)
+
+You can configure the addon to index media from multiple channels (both private and public).
+
+## Channel Formats in 'TELEGRAM_CHANNEL_ID'
+* **Private Channels**: Use their numeric IDs (e.g. -1001234567890).
+* **Public Channels**: Use their public usernames with or without the '@' symbol (e.g. '@public_channel' or 'public_channel').
+* **Multi-Channel Configuration**: Separate them with commas (e.g. 'TELEGRAM_CHANNEL_ID=-1001234567890, @my_public_channel, other_public_channel').
+
+### Access & Membership Requirements
+* **Standard Telegram Bot ('BOT_TOKEN')**: The bot **must** be added to the channel as a member or administrator so it has permission to query and read chat history.
+* **User Session Client ('USER_SESSION_STRING')**: The user account must be joined or subscribed to the channels so Pyrogram can search and resolve the files.
+
+### Recommended Limits
+While the config accepts any number of channels, it is highly recommended to limit your list to **5 to 10 channels max**. 
+* **Performance**: The addon queries each channel sequentially. Too many channels will cause Stremio to timeout (expecting responses in 3-5 seconds).
+* **Telegram Rate Limits**: Searching across too many channels simultaneously may trigger Telegram's 'FloodWait' warnings.
 
 ---
 
