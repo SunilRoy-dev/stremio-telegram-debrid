@@ -52,12 +52,12 @@ Deploy your own instance of the Telegram Stremio Addon instantly using any of th
 
 ## Key Features
 
-- **Direct Catalog Browsing & Search**: Search files directly inside Stremio or browse the latest 50 files sent to your Telegram channel.
-- **Metadata & Catalog Syncing**: Open entries in Stremio; the addon checks your Telegram channel for matching file names and links them as stream sources.
+- **Search & Match Integration**: Search for any video or media title in Stremio; the addon automatically scans your Telegram channel for matching file names and serves them instantly as stream sources.
 - **Stitched Split Streaming**: Automatically groups, merges, and streams multi-part file archives (such as `.001`, `.part1` patterns) as one continuous virtual stream.
+- **ZIP Archive Streaming**: Automatically scans, lists, and streams video files nested inside standard ZIP archives or split ZIP files (e.g., '.zip.001', '.zip.002', etc.) on the fly.
 - **Smart Segment Filtering**: Intelligently parses naming patterns and number sequences (e.g. Part 1, Part 2, V1, V2) from filenames to retrieve and stream only the exact segmented file requested.
 - **Subtitle Auto-Mapping**: Automatically scans your channel for matching subtitle files (SRT, VTT, ASS), injects them, and auto-detects English, Spanish, and French tracks.
-- **High-Speed Range Proxy**: Supports HTTP `206 Partial Content` streaming, enabling instant scrub/seek (fast-forwarding/rewinding) on players like ExoPlayer, VLC, and MPV.
+- **High-Speed Range Proxy**: Supports HTTP `206 Partial Content` streaming, enabling instant scrub/seek (fast-forwarding/rewinding) on players like ExoPlayer, VLC, and MPV (for direct files and stitched split streams).
 - **Zero-Storage Footprint**: Streams files chunk-by-chunk in memory directly from Telegram DCs. No temporary server storage is consumed.
 - **Secure Access Control**: Protects your endpoints using an optional API key query (`?api_key=...`) to prevent unauthorized access.
 - **Custom Logging**: Log streaming activity directly back to a separate private Telegram channel.
@@ -78,6 +78,18 @@ The addon parses standard split archive conventions including:
 1. **Aggregation**: The catalog handler parses filename patterns and clusters split files together, presenting them as a single item with their total combined file size (e.g., `Stitch stream | 6.2 GB`).
 2. **Dynamic Range Mapping**: When you press play or seek in Stremio, the addon maps the player's byte-range requests to the respective split files on the fly.
 3. **In-Memory Sequential Access**: It downloads only the necessary segments from Telegram DCs and transitions between split messages seamlessly in memory, resulting in uninterrupted playback.
+
+---
+
+## ZIP File Support
+
+You can upload a '.zip' file (or a split ZIP like '.zip.001', '.zip.002', etc.) to your Telegram channel. The addon will automatically look inside the ZIP, find all the video files, and list them in Stremio so you can play them directly!
+
+### ⚠️ Important: Skipping/Seeking does NOT work for ZIPs
+> [!IMPORTANT]
+> **You cannot skip forward or rewind when playing videos that are inside ZIP files.**
+> - **Why?** To skip to a certain part of a video inside a ZIP file, the server has to download and unpack the ZIP file from the very beginning up to that point. For large media files, this takes too much time, and your Stremio player will freeze or disconnect.
+> - **Easy Fix**: If you want to skip/seek through your videos, **do not upload them in a ZIP file**. Upload them **directly as video files ('.mp4', '.mkv', etc.)** or as split video files ('.001', '.002', etc.), and seeking will work perfectly!
 
 ---
 
@@ -247,28 +259,36 @@ Hugging Face Spaces is the recommended hosting platform as it provides fast netw
 
 #### Hugging Face Spaces Setup Guide
 
-1. **Create a Hugging Face Account**: Visit [Hugging Face](https://huggingface.co/) and click **Sign Up** to create a free account.
-2. **Create a New Space**: Click your profile picture in the top-right corner and select **New Space** (or go directly to [huggingface.co/new-space](https://huggingface.co/new-space)).
-   - **Space Name**: Choose a name (e.g. `my-stremio-addon`).
-   - **License**: Choose `mit` or leave blank.
+1. **Fork this Repository**: 
+   - Click the 'Fork' button at the top-right of this GitHub page to copy it to your own GitHub account.
+
+2. **Create a Hugging Face Account**: 
+   - Visit [Hugging Face](https://huggingface.co/) and sign up for a free account.
+
+3. **Create a New Space**: 
+   - Click your profile picture in the top-right and select **New Space** (or go to [huggingface.co/new-space](https://huggingface.co/new-space)).
+   - **Space Name**: Choose a name (for example: 'stremio-telegram-addon').
    - **Select the Space SDK**: Click **Docker**.
-   - **Docker Template**: Select **Blank** (do not select template options like Gradio or Streamlit).
-   - **Space Visibility**: Set to **Public** (required for the free tier; private spaces require a paid subscription).
-   - Click **Create Space**.
-3. **Configure Environment Secrets**: Click the **Settings** tab in the top menu of your newly created Space. Scroll down to the **Variables and secrets** section and click **New secret** to add each of the following variables:
-   - `API_ID`
-   - `API_HASH`
-   - `BOT_TOKEN` (or `USER_SESSION_STRING`)
-   - `TELEGRAM_CHANNEL_ID`
-   - `API_KEY` (highly recommended to secure your public Space endpoint!)
-   - `ADDON_URL`: Set this to `https://<your-username>-<your-space-name>.hf.space` (you can find this URL by clicking "Embed this Space" in the top-right menu of your Space page).
-4. **Push the Files**: Clone your Hugging Face Space repository locally (git commands are shown on the Space's homepage). Copy all files from this project (except `.env` and `.git` folders) into your cloned Space folder. Commit and push the changes:
-   ```bash
-   git add .
-   git commit -m "feat: deploy addon"
-   git push
-   ```
-   Hugging Face will automatically detect the `Dockerfile`, build the container, and deploy your addon. Once the status turns to **Running**, your addon is live!
+   - **Template**: Keep it as **Blank**.
+   - Scroll down to **Space Visibility** and make sure it is set to **Public** (required for the free tier).
+   - Click **Create Space** at the bottom.
+
+4. **Connect GitHub and Deploy**:
+   - Once your Space is created, click the **Settings** tab at the top-right of your Space page.
+   - Scroll down to the **GitHub integration** section.
+   - Authorize Hugging Face to access your GitHub, then select your fork of 'stremio-telegram-debrid' from the dropdown list.
+   - Click **Save** / **Connect**. Hugging Face will automatically pull the code from your GitHub fork and deploy it!
+
+5. **Configure Environment Secrets**: 
+   - Stay in the **Settings** tab, scroll down to **Variables and secrets**, and click **New secret** to add your settings:
+     - 'API_ID' (from my.telegram.org)
+     - 'API_HASH' (from my.telegram.org)
+     - 'BOT_TOKEN' (or 'USER_SESSION_STRING')
+     - 'TELEGRAM_CHANNEL_ID'
+     - 'API_KEY' (a password of your choice to protect your addon link)
+     - 'ADDON_URL': Set this to 'https://<your-hf-username>-<your-space-name>.hf.space' (you can find this URL by clicking "Embed this Space" in the top-right of your Space page).
+
+Hugging Face will rebuild your Space automatically when you update secrets. Once the status bar at the top turns green and says **Running**, your addon is online!
 
 ### 2. Render
 - **Cost**: Hobby/Free Tier. No credit card required at signup.

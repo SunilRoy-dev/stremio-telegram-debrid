@@ -22,8 +22,17 @@ from utils import (
     get_metadata_from_cinemeta,
     matches_subtitle,
     get_search_query_from_filename,
-    parse_split_info
+    parse_split_info,
+    is_video_file
 )
+from zip_helper import (
+    list_zip_files,
+    TelegramSeekableReader,
+    get_zip_entry_data_offset,
+    zip_compressed_generator
+)
+import anyio
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -110,23 +119,10 @@ def get_manifest(api_key: str = ""):
         "name": "Telegram Addon by SunilRoy-dev",
         "description": "Personal Telegram streaming proxy. For educational & personal testing only. Do not use for unauthorized hosting of copyrighted media.",
         "logo": "https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg",
-        "resources": ["catalog", "stream", "subtitles"],
+        "resources": ["meta", "stream", "subtitles"],
         "types": ["movie", "series"],
         "idPrefixes": ["tgfile_", "tt"],
-        "catalogs": [
-            {
-                "type": "movie",
-                "id": "tg_catalog_movies",
-                "name": "Telegram Videos",
-                "extra": [{"name": "search", "isRequired": False}]
-            },
-            {
-                "type": "series",
-                "id": "tg_catalog_series",
-                "name": "Telegram Segmented Videos",
-                "extra": [{"name": "search", "isRequired": False}]
-            }
-        ],
+        "catalogs": [],
         "behaviorHints": {
             "configurable": False,
             "configurationRequired": False
@@ -646,22 +642,44 @@ async def catalog_handler(
 
     grouped_items = group_tg_messages(messages)
     metas = []
+    logo_url = f"{Config.ADDON_URL}/stremio_telegram_logo.png" if getattr(Config, "ADDON_URL", None) else None
+    
     for item in grouped_items:
         if isinstance(item, tuple):
             base_name, parts = item
-            total_size = sum((x.video or x.document or x.audio).file_size for x in parts)
+            total_size = sum((x.video or x.document or x.audio).file_size for x in parts if (x.video or x.document or x.audio))
             first_msg = parts[0]
             chat_id = first_msg.chat.id
             msg_ids = ",".join(str(x.id) for x in parts)
             
-            tg_id = f"tgfile_split_{chat_id}_{msg_ids}"
-            metas.append({
-                "id": tg_id,
-                "type": type,
-                "name": base_name,
-                "description": f"💾 Telegram File (Split Parts: {len(parts)})\n📦 Total Size: {format_size(total_size)}",
-                "poster": None,
-            })
+            is_zip = False
+            if base_name.lower().endswith(".zip"):
+                try:
+                    entries = await list_zip_files(tg_client_manager.client, parts)
+                    video_entries = [e for e in entries if is_video_file(e.filename)]
+                    if video_entries:
+                        is_zip = True
+                        for entry in video_entries:
+                            tg_id = f"tgfile_splitzip_{chat_id}_{msg_ids}//{entry.filename}"
+                            metas.append({
+                                "id": tg_id,
+                                "type": type,
+                                "name": entry.filename,
+                                "description": f"💾 Telegram ZIP Entry\n📦 Size: {format_size(entry.file_size)}\n📂 ZIP Archive: {base_name}",
+                                "poster": logo_url,
+                            })
+                except Exception as e:
+                    logger.error(f"Error reading split ZIP archive: {e}")
+                    
+            if not is_zip:
+                tg_id = f"tgfile_split_{chat_id}_{msg_ids}"
+                metas.append({
+                    "id": tg_id,
+                    "type": type,
+                    "name": base_name,
+                    "description": f"💾 Telegram File (Split Parts: {len(parts)})\n📦 Total Size: {format_size(total_size)}",
+                    "poster": logo_url,
+                })
         else:
             msg = item
             media = msg.video or msg.document or msg.audio
@@ -669,16 +687,154 @@ async def catalog_handler(
             file_size = media.file_size
             caption = msg.caption or ""
             
-            tg_id = f"tgfile_{msg.chat.id}_{msg.id}"
-            metas.append({
-                "id": tg_id,
-                "type": type,
-                "name": file_name,
-                "description": f"💾 Telegram File\n📦 Size: {format_size(file_size)}\n💬 {caption}" if caption else f"💾 Telegram File\n📦 Size: {format_size(file_size)}",
-                "poster": None,
-            })
+            is_zip = False
+            if file_name.lower().endswith(".zip"):
+                try:
+                    entries = await list_zip_files(tg_client_manager.client, msg)
+                    video_entries = [e for e in entries if is_video_file(e.filename)]
+                    if video_entries:
+                        is_zip = True
+                        for entry in video_entries:
+                            tg_id = f"tgfile_zip_{msg.chat.id}_{msg.id}//{entry.filename}"
+                            metas.append({
+                                "id": tg_id,
+                                "type": type,
+                                "name": entry.filename,
+                                "description": f"💾 Telegram ZIP Entry\n📦 Size: {format_size(entry.file_size)}\n📂 ZIP Archive: {file_name}",
+                                "poster": logo_url,
+                            })
+                except Exception as e:
+                    logger.error(f"Error reading standalone ZIP archive: {e}")
+                    
+            if not is_zip:
+                tg_id = f"tgfile_{msg.chat.id}_{msg.id}"
+                metas.append({
+                    "id": tg_id,
+                    "type": type,
+                    "name": file_name,
+                    "description": f"💾 Telegram File\n📦 Size: {format_size(file_size)}\n💬 {caption}" if caption else f"💾 Telegram File\n📦 Size: {format_size(file_size)}",
+                    "poster": logo_url,
+                })
             
     return {"metas": metas}
+
+from fastapi.responses import FileResponse
+import os
+
+@app.get("/stremio_telegram_logo.png")
+async def get_logo():
+    if os.path.exists("stremio_telegram_logo.png"):
+        return FileResponse("stremio_telegram_logo.png")
+    return Response(status_code=404)
+
+@app.get("/stremio_telegram_banner.png")
+async def get_banner():
+    if os.path.exists("stremio_telegram_banner.png"):
+        return FileResponse("stremio_telegram_banner.png")
+    return Response(status_code=404)
+
+@app.get("/meta/{type}/{meta_id}.json", dependencies=[Depends(verify_api_key)])
+async def meta_handler(type: str, meta_id: str, api_key: str = ""):
+    if not meta_id.startswith("tgfile_"):
+        return {"meta": {}}
+        
+    try:
+        is_zip_entry = False
+        zip_entry_filename = ""
+        base_meta_id = meta_id
+        if "//" in meta_id:
+            is_zip_entry = True
+            base_meta_id, zip_entry_filename = meta_id.split("//", 1)
+            
+        chat_id_val = None
+        msg_ids_str = ""
+        is_split = False
+        
+        if base_meta_id.startswith("tgfile_splitzip_"):
+            is_split = True
+            parts = base_meta_id.split("_")
+            chat_id = parts[2]
+            msg_ids_str = parts[3]
+        elif base_meta_id.startswith("tgfile_split_"):
+            is_split = True
+            parts = base_meta_id.split("_")
+            chat_id = parts[2]
+            msg_ids_str = parts[3]
+        elif base_meta_id.startswith("tgfile_zip_"):
+            parts = base_meta_id.split("_")
+            chat_id = parts[2]
+            msg_ids_str = parts[3]
+        else:
+            parts = base_meta_id.split("_")
+            chat_id = parts[1]
+            msg_ids_str = parts[2]
+            
+        try:
+            chat_id_val = int(chat_id)
+        except ValueError:
+            chat_id_val = chat_id
+            
+        msg_id_list = [int(x) for x in msg_ids_str.split(",") if x.strip().isdigit()]
+        
+        messages = []
+        for msg_id in msg_id_list:
+            msg = await tg_client_manager.get_message(msg_id, chat_id=chat_id_val)
+            if msg:
+                messages.append(msg)
+                
+        if not messages:
+            return {"meta": {}}
+            
+        first_msg = messages[0]
+        media = first_msg.video or first_msg.document or first_msg.audio
+        first_fn = getattr(media, "file_name", "video.mp4") or "video.mp4"
+        
+        if is_zip_entry and zip_entry_filename:
+            file_name = zip_entry_filename
+            zip_entries = await list_zip_files(tg_client_manager.client, messages)
+            file_size = 0
+            for entry in zip_entries:
+                if entry.filename == zip_entry_filename:
+                    file_size = entry.file_size
+                    break
+            description = f"💾 Telegram ZIP Entry\n📦 Size: {format_size(file_size)}\n📂 ZIP Archive: {first_fn}"
+        else:
+            file_name = first_fn
+            if is_split:
+                base_name, _ = parse_split_info(first_fn)
+                file_name = base_name or first_fn
+                total_size = sum((x.video or x.document or x.audio).file_size for x in messages if (x.video or x.document or x.audio))
+                description = f"💾 Telegram File (Split Parts: {len(messages)})\n📦 Total Size: {format_size(total_size)}"
+            else:
+                total_size = media.file_size
+                caption = first_msg.caption or ""
+                description = f"💾 Telegram File\n📦 Size: {format_size(total_size)}\n💬 {caption}" if caption else f"💾 Telegram File\n📦 Size: {format_size(total_size)}"
+                
+        meta = {
+            "id": meta_id,
+            "type": type,
+            "name": file_name,
+            "description": description,
+            "poster": f"{Config.ADDON_URL}/stremio_telegram_logo.png" if getattr(Config, "ADDON_URL", None) else None,
+            "background": f"{Config.ADDON_URL}/stremio_telegram_banner.png" if getattr(Config, "ADDON_URL", None) else None,
+            "logo": f"{Config.ADDON_URL}/stremio_telegram_logo.png" if getattr(Config, "ADDON_URL", None) else None,
+        }
+        
+        if type == "series":
+            meta["videos"] = [
+                {
+                    "id": meta_id,
+                    "title": file_name,
+                    "season": 1,
+                    "episode": 1
+                }
+            ]
+            
+        return {"meta": meta}
+    except Exception as e:
+        logger.error(f"Failed to generate metadata for {meta_id}: {e}")
+        return {"meta": {}}
+
 
 async def find_subtitles_for_video(video_filename: str, api_key: str = "", cached_messages=None) -> list:
     subtitles = []
@@ -735,7 +891,65 @@ async def stream_handler(
     query_param = f"?api_key={api_key}" if api_key else ""
 
     if stream_id.startswith("tgfile_"):
-        if stream_id.startswith("tgfile_split_"):
+        if "//" in stream_id:
+            base_stream_id, zip_entry_filename = stream_id.split("//", 1)
+            is_split = False
+            if base_stream_id.startswith("tgfile_splitzip_"):
+                is_split = True
+                parts = base_stream_id.split("_")
+                chat_id = parts[2]
+                msg_ids = parts[3]
+            elif base_stream_id.startswith("tgfile_split_"):
+                is_split = True
+                parts = base_stream_id.split("_")
+                chat_id = parts[2]
+                msg_ids = parts[3]
+            elif base_stream_id.startswith("tgfile_zip_"):
+                parts = base_stream_id.split("_")
+                chat_id = parts[2]
+                msg_ids = parts[3]
+            else:
+                parts = base_stream_id.split("_")
+                chat_id = parts[1]
+                msg_ids = parts[2]
+                
+            try:
+                chat_id_val = int(chat_id)
+            except ValueError:
+                chat_id_val = chat_id
+                
+            msg_id_list = [int(x) for x in msg_ids.split(",") if x.strip().isdigit()]
+            
+            try:
+                messages = []
+                for msg_id in msg_id_list:
+                    msg = await tg_client_manager.get_message(msg_id, chat_id=chat_id_val)
+                    if msg:
+                        messages.append(msg)
+                        
+                if messages:
+                    zip_entries = await list_zip_files(tg_client_manager.client, messages)
+                    file_size = 0
+                    for entry in zip_entries:
+                        if entry.filename == zip_entry_filename:
+                            file_size = entry.file_size
+                            break
+                            
+                    stream_url = f"{Config.ADDON_URL}/stream/zip/{chat_id}/{msg_ids}/{urllib.parse.quote(zip_entry_filename)}{query_param}"
+                    subtitles = await find_subtitles_for_video(zip_entry_filename, api_key=api_key)
+                    
+                    streams.append({
+                        "name": "▶ TG ZIP Play",
+                        "title": f"{zip_entry_filename}\n💾 Stream ZIP entry | 📦 {format_size(file_size)}",
+                        "url": stream_url,
+                        "subtitles": subtitles,
+                        "behaviorHints": {
+                            "notWebReady": True,
+                        }
+                    })
+            except Exception as e:
+                logger.error(f"Failed resolving zip stream for {stream_id}: {e}")
+        elif stream_id.startswith("tgfile_split_"):
             parts = stream_id.split("_")
             if len(parts) >= 4:
                 chat_id = parts[2]
@@ -835,20 +1049,44 @@ async def stream_handler(
                         if type == "series" and not matches_episode(file_name, season, episode):
                             continue
                             
-                        total_size = sum((x.video or x.document or x.audio).file_size for x in parts)
+                        total_size = sum((x.video or x.document or x.audio).file_size for x in parts if (x.video or x.document or x.audio))
                         msg_ids = ",".join(str(x.id) for x in parts)
                         chat_id = first_msg.chat.id
                         
-                        stream_url = f"{Config.ADDON_URL}/stream/split/{chat_id}/{msg_ids}/{urllib.parse.quote(base_name)}{query_param}"
-                        
-                        streams.append({
-                            "name": "▶ TG Channel (Split)",
-                            "title": f"{base_name}\n💾 Stitch stream | 📦 {format_size(total_size)}",
-                            "url": stream_url,
-                            "behaviorHints": {
-                                "notWebReady": True,
-                            }
-                        })
+                        is_zip = False
+                        if base_name.lower().endswith(".zip"):
+                            try:
+                                entries = await list_zip_files(tg_client_manager.client, parts)
+                                video_entries = [e for e in entries if is_video_file(e.filename)]
+                                if video_entries:
+                                    is_zip = True
+                                    for entry in video_entries:
+                                        if type == "series" and not matches_episode(entry.filename, season, episode):
+                                            continue
+                                        stream_url = f"{Config.ADDON_URL}/stream/zip/{chat_id}/{msg_ids}/{urllib.parse.quote(entry.filename)}{query_param}"
+                                        subtitles = await find_subtitles_for_video(entry.filename, api_key=api_key, cached_messages=tg_results)
+                                        streams.append({
+                                            "name": "▶ TG ZIP Play (Split)",
+                                            "title": f"{entry.filename}\n💾 Stream ZIP entry | 📦 {format_size(entry.file_size)}",
+                                            "url": stream_url,
+                                            "subtitles": subtitles,
+                                            "behaviorHints": {
+                                                "notWebReady": True,
+                                            }
+                                        })
+                            except Exception as e:
+                                logger.error(f"Error checking split ZIP for IMDB: {e}")
+                                
+                        if not is_zip:
+                            stream_url = f"{Config.ADDON_URL}/stream/split/{chat_id}/{msg_ids}/{urllib.parse.quote(base_name)}{query_param}"
+                            streams.append({
+                                "name": "▶ TG Play (Split)",
+                                "title": f"{base_name}\n💾 Stitch stream | 📦 {format_size(total_size)}",
+                                "url": stream_url,
+                                "behaviorHints": {
+                                    "notWebReady": True,
+                                }
+                            })
                     else:
                         msg = item
                         media = msg.video or msg.document or msg.audio
@@ -858,18 +1096,45 @@ async def stream_handler(
                             continue
                             
                         file_size = media.file_size
-                        stream_url = f"{Config.ADDON_URL}/stream/file/{msg.chat.id}/{msg.id}/{urllib.parse.quote(file_name)}{query_param}"
-                        subtitles = await find_subtitles_for_video(file_name, api_key=api_key, cached_messages=tg_results)
+                        chat_id = msg.chat.id
                         
-                        streams.append({
-                            "name": "▶ TG Channel",
-                            "title": f"{file_name}\n💾 Telegram File | 📦 {format_size(file_size)}",
-                            "url": stream_url,
-                            "subtitles": subtitles,
-                            "behaviorHints": {
-                                "notWebReady": True,
-                            }
-                        })
+                        is_zip = False
+                        if file_name.lower().endswith(".zip"):
+                            try:
+                                entries = await list_zip_files(tg_client_manager.client, msg)
+                                video_entries = [e for e in entries if is_video_file(e.filename)]
+                                if video_entries:
+                                    is_zip = True
+                                    for entry in video_entries:
+                                        if type == "series" and not matches_episode(entry.filename, season, episode):
+                                            continue
+                                        stream_url = f"{Config.ADDON_URL}/stream/zip/{chat_id}/{msg.id}/{urllib.parse.quote(entry.filename)}{query_param}"
+                                        subtitles = await find_subtitles_for_video(entry.filename, api_key=api_key, cached_messages=tg_results)
+                                        streams.append({
+                                            "name": "▶ TG ZIP Play",
+                                            "title": f"{entry.filename}\n💾 Stream ZIP entry | 📦 {format_size(entry.file_size)}",
+                                            "url": stream_url,
+                                            "subtitles": subtitles,
+                                            "behaviorHints": {
+                                                "notWebReady": True,
+                                            }
+                                        })
+                            except Exception as e:
+                                logger.error(f"Error checking standalone ZIP for IMDB: {e}")
+                                
+                        if not is_zip:
+                            stream_url = f"{Config.ADDON_URL}/stream/file/{chat_id}/{msg.id}/{urllib.parse.quote(file_name)}{query_param}"
+                            subtitles = await find_subtitles_for_video(file_name, api_key=api_key, cached_messages=tg_results)
+                            
+                            streams.append({
+                                "name": "▶ TG Play",
+                                "title": f"{file_name}\n💾 Telegram File | 📦 {format_size(file_size)}",
+                                "url": stream_url,
+                                "subtitles": subtitles,
+                                "behaviorHints": {
+                                    "notWebReady": True,
+                                }
+                            })
         except Exception as e:
             logger.error(f"Cinemeta search/resolve failed: {e}")
 
@@ -1088,14 +1353,15 @@ async def tg_stream_proxy(
         
     async def file_generator():
         bytes_sent = 0
-        first_chunk = True
+        bytes_to_skip = skip_bytes
         try:
             async for chunk in tg_client_manager.client.stream_media(media, offset=offset):
-                if first_chunk:
-                    first_chunk = False
-                    if skip_bytes < len(chunk):
-                        chunk = chunk[skip_bytes:]
+                if bytes_to_skip > 0:
+                    if bytes_to_skip < len(chunk):
+                        chunk = chunk[bytes_to_skip:]
+                        bytes_to_skip = 0
                     else:
+                        bytes_to_skip -= len(chunk)
                         continue
                         
                 if bytes_sent + len(chunk) > content_length:
@@ -1219,15 +1485,16 @@ async def tg_split_stream_proxy(
             skip_bytes = local_offset % block_size
             
             chunk_bytes_sent = 0
-            first_block = True
+            bytes_to_skip = skip_bytes
             
             try:
                 async for block in tg_client_manager.client.stream_media(chunk["media"], offset=offset_blocks):
-                    if first_block:
-                        first_block = False
-                        if skip_bytes < len(block):
-                            block = block[skip_bytes:]
+                    if bytes_to_skip > 0:
+                        if bytes_to_skip < len(block):
+                            block = block[bytes_to_skip:]
+                            bytes_to_skip = 0
                         else:
+                            bytes_to_skip -= len(block)
                             continue
                             
                     if chunk_bytes_sent + len(block) > chunk_read_len:
@@ -1254,6 +1521,179 @@ async def tg_split_stream_proxy(
         media_type=mime_type,
         headers=headers
     )
+
+@app.api_route("/stream/zip/{chat_id}/{message_ids}/{filename}", methods=["GET", "HEAD"])
+async def tg_zip_stream_proxy(
+    chat_id: str,
+    message_ids: str,
+    filename: str,
+    request: Request,
+    api_key: str = ""
+):
+    if Config.API_KEY and api_key != Config.API_KEY:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    msg_id_list = [int(x) for x in message_ids.split(",") if x.strip().isdigit()]
+    if not msg_id_list:
+        raise HTTPException(status_code=400, detail="Invalid message IDs")
+        
+    try:
+        chat_id_val = int(chat_id)
+    except ValueError:
+        chat_id_val = chat_id
+        
+    if request.method == "GET":
+        asyncio.create_task(
+            tg_client_manager.send_play_log(filename, chat_id_val, msg_id_list[0])
+        )
+        
+    messages = []
+    for msg_id in msg_id_list:
+        msg = await tg_client_manager.get_message(msg_id, chat_id=chat_id_val)
+        if msg:
+            messages.append(msg)
+            
+    if not messages:
+        raise HTTPException(status_code=404, detail="Messages not found")
+        
+    zip_entries = await list_zip_files(tg_client_manager.client, messages)
+    target_entry = None
+    for entry in zip_entries:
+        if entry.filename == filename:
+            target_entry = entry
+            break
+            
+    if not target_entry:
+        raise HTTPException(status_code=404, detail=f"File '{filename}' not found in ZIP archive")
+        
+    file_size = target_entry.file_size
+    mime_type = "video/mp4"
+    filename_lower = filename.lower()
+    if filename_lower.endswith(".mkv"):
+        mime_type = "video/x-matroska"
+    elif filename_lower.endswith(".mp4"):
+        mime_type = "video/mp4"
+    elif filename_lower.endswith(".avi"):
+        mime_type = "video/x-msvideo"
+        
+    range_header = request.headers.get("Range")
+    start = 0
+    end = file_size - 1
+    
+    if range_header:
+        try:
+            bytes_range = range_header.replace("bytes=", "").split("-")
+            if bytes_range[0]:
+                start = int(bytes_range[0])
+            if len(bytes_range) > 1 and bytes_range[1]:
+                end = int(bytes_range[1])
+        except ValueError:
+            pass
+            
+    content_length = end - start + 1
+    
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(content_length),
+        "Content-Disposition": f'inline; filename="{filename}"',
+    }
+    
+    status_code = 206 if range_header else 200
+    
+    if request.method == "HEAD":
+        return Response(
+            status_code=status_code,
+            media_type=mime_type,
+            headers=headers
+        )
+        
+    import zipfile
+    if target_entry.compress_type == zipfile.ZIP_STORED:
+        logger.info(f"ZIP entry '{filename}' is STORED (uncompressed). Using direct offset proxy.")
+        reader = TelegramSeekableReader(tg_client_manager.client, messages)
+        data_start = await get_zip_entry_data_offset(reader, target_entry.header_offset)
+        
+        stream_start = data_start + start
+        stream_end = data_start + end
+        stream_len = stream_end - stream_start + 1
+        
+        chunks_info = []
+        total_size = 0
+        
+        for part in reader.parts:
+            chunks_info.append({
+                "media": part["media"],
+                "size": part["size"],
+                "start_byte": part["start"],
+                "end_byte": part["end"] - 1
+            })
+            total_size += part["size"]
+            
+        async def split_file_generator():
+            bytes_sent = 0
+            block_size = 1024 * 1024
+            
+            for chunk in chunks_info:
+                c_start = chunk["start_byte"]
+                c_end = chunk["end_byte"]
+                
+                if c_end < stream_start or c_start > stream_end:
+                    continue
+                    
+                read_start = max(c_start, stream_start)
+                read_end = min(c_end, stream_end)
+                chunk_read_len = read_end - read_start + 1
+                
+                local_offset = read_start - c_start
+                offset_blocks = local_offset // block_size
+                skip_bytes = local_offset % block_size
+                
+                chunk_bytes_sent = 0
+                bytes_to_skip = skip_bytes
+                
+                try:
+                    async for block in tg_client_manager.client.stream_media(chunk["media"], offset=offset_blocks):
+                        if bytes_to_skip > 0:
+                            if bytes_to_skip < len(block):
+                                block = block[bytes_to_skip:]
+                                bytes_to_skip = 0
+                            else:
+                                bytes_to_skip -= len(block)
+                                continue
+                                
+                        if chunk_bytes_sent + len(block) > chunk_read_len:
+                            block = block[:chunk_read_len - chunk_bytes_sent]
+                            
+                        yield block
+                        chunk_bytes_sent += len(block)
+                        bytes_sent += len(block)
+                        
+                        if chunk_bytes_sent >= chunk_read_len:
+                            break
+                except Exception as e:
+                    logger.error(f"Error streaming split ZIP chunk: {e}")
+                    break
+                    
+                if bytes_sent >= stream_len:
+                    break
+                    
+        logger.info(f"Streaming uncompressed ZIP entry '{filename}' (raw bytes {stream_start}-{stream_end}/{total_size}) - Status {status_code}")
+        return StreamingResponse(
+            split_file_generator(),
+            status_code=status_code,
+            media_type=mime_type,
+            headers=headers
+        )
+    else:
+        logger.info(f"ZIP entry '{filename}' is COMPRESSED (type {target_entry.compress_type}). Streaming on-the-fly decompression.")
+        reader = TelegramSeekableReader(tg_client_manager.client, messages)
+        return StreamingResponse(
+            zip_compressed_generator(reader, filename, start, end),
+            status_code=status_code,
+            media_type=mime_type,
+            headers=headers
+        )
 
 if __name__ == "__main__":
     import uvicorn

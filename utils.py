@@ -171,3 +171,9 @@ async def get_metadata_from_cinemeta(meta_type: str, imdb_id: str) -> dict:
         logger.error(f"Cinemeta metadata lookup failed: {e}")
         
     return {}
+
+VIDEO_EXTENSIONS = ('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.ts', '.m4v')
+
+def is_video_file(filename: str) -> bool:
+    return filename.lower().endswith(VIDEO_EXTENSIONS)
+

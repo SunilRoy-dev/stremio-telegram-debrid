@@ -351,7 +351,12 @@ class TelegramClientManager:
     async def stop(self):
         if self.is_running and self.client:
             logger.info("Stopping Pyrogram client...")
-            await self.client.stop()
+            try:
+                await asyncio.wait_for(self.client.stop(), timeout=3.0)
+            except asyncio.TimeoutError:
+                logger.warning("Pyrogram client stop timed out, skipping...")
+            except Exception as e:
+                logger.warning(f"Error stopping Pyrogram client: {e}")
             self.is_running = False
 
     async def send_play_log(self, filename: str, chat_id: Union[str, int], message_id: int):
