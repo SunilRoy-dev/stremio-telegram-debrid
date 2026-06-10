@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -m -u 1000 user
 
 WORKDIR /app
+RUN chown user:user /app
 
 # Copy dependency specifications and install them globally
 COPY requirements.txt .
