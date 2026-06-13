@@ -450,6 +450,10 @@ networks:
     external: true
 ```
 
+> [!TIP]
+> **Already running Watchtower?**
+> If you already have a global Watchtower container running (e.g., from Viren070's template), you can safely omit/delete the `stremio-telegram-debrid-updater` service block from your `compose.yaml` file to avoid running redundant container update processes.
+
 #### Step 2: Configure the App Environment Variables
 Create a file named `apps/stremio-telegram-debrid/.env`. You can download our sample `.env.example` template directly by running:
 ```bash
