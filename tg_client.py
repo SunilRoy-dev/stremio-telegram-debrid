@@ -282,6 +282,7 @@ class TelegramClientManager:
                 api_id=Config.API_ID,
                 api_hash=Config.API_HASH,
                 session_string=Config.USER_SESSION_STRING,
+                in_memory=True,
                 no_updates=True
             )
         elif Config.BOT_TOKEN:
@@ -291,6 +292,7 @@ class TelegramClientManager:
                 api_id=Config.API_ID,
                 api_hash=Config.API_HASH,
                 bot_token=Config.BOT_TOKEN,
+                in_memory=True,
                 no_updates=True
             )
         else:
