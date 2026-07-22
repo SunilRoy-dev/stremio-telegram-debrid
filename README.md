@@ -75,8 +75,8 @@ Deploy your own instance of the Telegram Stremio Addon instantly using any of th
 ## 🌟 Key Features Explained (Beginner-Friendly)
 
 * **Smart Search & Quality Sorting**: 
-  - *What it is:* When you request a file, the addon searches your Telegram channel and filters out files by name matching.
-  - *How it helps:* It automatically reads details like resolutions (4K, 1080p, 720p) and file sizes, sorting the results so you see the highest quality stream choices first.
+  - *What it is:* When you search or click play in Stremio, the addon automatically finds the right files in your Telegram channel.
+  - *How it helps:* It reads both your file names and message captions (supporting formats like `S01E01` or `1x01`) and sorts the video streams by quality (4K, 1080p, 720p) so you see the best choice first.
 * **Auto-Refreshing Stream Links**: 
   - *What it is:* Telegram file links naturally expire after a few hours. If you pause a stream for a long time, the original link breaks.
   - *How it helps:* The addon automatically detects this and fetches a fresh download link from Telegram in the background, letting you resume playing smoothly without errors.
@@ -156,7 +156,7 @@ You can upload a '.zip' file (or a split ZIP like '.zip.001', '.zip.002', etc.) 
 
 ## 📂 Naming and Matching Guide
 
-For the search matching engine to pair your uploaded files, name your files (or write your Telegram message captions) using this clean format:
+To help the addon find your uploaded videos, name your files or write your Telegram message captions using this clean format:
 
 ```text
 [File Name] [Season/Episode Info] [Extra Tags].extension
@@ -164,12 +164,17 @@ For the search matching engine to pair your uploaded files, name your files (or 
 
 ### Simple Rules to Follow:
 
-1. **Title/Name goes first**: The name of the video or file must be the first thing in the filename. Dot, dash, or space separations all work (e.g., `My.Video.File.2024.mkv` or `My Video File (2024).mkv`).
-2. **Season/Episode markers**: Put them directly after the file name. The engine matches standard patterns:
-   * **Standard**: `S01E02`, `s1e2`, `s01.e02`, `1x02`
-   * **Text**: `Season 1 Episode 2`, `Temporada 1 Capitulo 2` (Spanish/multilingual tags supported!)
-   * **Episode Only**: `Ep 12`, `capitulo 12`, `[12]`, `- 12 -` (defaults to Season 1)
-3. **Tags go at the end**: Put metadata details like resolution or audio *after* the season/episode info (e.g., `My Video File S01E02 [1080p] [Dual-Audio].mkv`).
+1. **Put Details in Filename or Caption**:
+   - You can put your video title and episode details in the **file name**, the **message caption**, or **both**. The addon checks both to find your files!
+2. **Easy Season & Episode Format**:
+   - Write season and episode numbers in whatever format you prefer. Supported styles include:
+     * **Standard**: `S01E01`, `s1e1`, `s01.e01`, `1x01`, `01x01`, `1x1`
+     * **Text**: `Season 1 Episode 1`, `Temporada 1 Capitulo 1` (Spanish and other languages supported!)
+     * **Episode Only**: `Ep 12`, `capitulo 12`, `[12]`, `- 12 -` (defaults to Season 1)
+3. **Direct Video Messages Work Automatically**:
+   - Videos posted directly to your Telegram channel work automatically, even if they don't have a `.mp4` or `.mkv` extension in their name.
+4. **Extra Details at the End**:
+   - Put extra details like resolution or audio at the end (for example: `My Video S01E02 [1080p] [Dual-Audio].mkv`).
 
 ---
 

@@ -51,6 +51,9 @@ async def lifespan(app: FastAPI):
         print("   TELEGRAM ADDON BY SUNILROY-DEV")
         print("   GitHub: https://github.com/SunilRoy-dev/stremio-telegram-debrid")
         print("   For educational and personal testing only.")
+        print("   Not intended for piracy or illegal activities.")
+        print("   Always follow your local laws.")
+        print("   The developer is not responsible for user actions or content.")
         print("=" * 60 + "\n")
         
         Config.validate()
@@ -1215,6 +1218,9 @@ async def stream_handler(
                         file_name = getattr(media, "file_name", None) or msg.caption or ""
                         caption = msg.caption or ""
                         
+                        if msg.video and not is_video_file(file_name):
+                            file_name = f"{file_name}.mp4" if file_name else f"{movie_name}.mp4"
+                            
                         score = matcher.calculate_match_score(
                             filename=file_name,
                             caption=caption,
