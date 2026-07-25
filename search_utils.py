@@ -16,7 +16,8 @@ RES_UNKNOWN = "Unknown"
 RE_YEAR = re.compile(r'\b(19\d{2}|20\d{2})\b')
 RE_EPISODE_EXPLICIT = re.compile(
     r'\b[sS]\s*(\d{1,2})\s*[eE]\s*(\d{1,4})\b'
-    r'|\b[tT]emp(?:orada)?\s*(\d{1,2})\s*[cC]ap(?:itulo)?\s*(\d{1,4})\b',
+    r'|\b[tT]emp(?:orada)?\s*(\d{1,2})\s*[cC]ap(?:itulo)?\s*(\d{1,4})\b'
+    r'|(?<!\d)(\d{1,2})\s*[xX]\s*(\d{1,4})(?!\d)',
     re.IGNORECASE
 )
 RE_EPISODE_ONLY = re.compile(
@@ -28,6 +29,16 @@ RE_CLEANUP = re.compile(r'[._\-\[\]()\'",!?:]')
 RE_SPACES = re.compile(r'\s+')
 RE_EXTENSION = re.compile(r'\.(mkv|mp4|avi|mov|wmv|m4v|ts|m2ts)$', re.IGNORECASE)
 
+_RES_SCORES = {
+    RES_4K: 60,
+    RES_1080P: 50,
+    RES_720P: 40,
+    RES_480P: 30,
+    RES_360P: 20,
+    RES_CAM: -10,
+    RES_SCR: -10,
+}
+
 def normalize_text(text: str) -> str:
     if not text:
         return ""
@@ -38,14 +49,11 @@ def normalize_text(text: str) -> str:
     return RE_SPACES.sub(" ", cleaned).strip().lower()
 
 def extract_season_episode_pair(text: str) -> Optional[Tuple[int, int]]:
-    match = RE_EPISODE_EXPLICIT.search(text)
-    if not match:
-        match = RE_EPISODE_EXPLICIT.search(normalize_text(text))
+    match = RE_EPISODE_EXPLICIT.search(text) or RE_EPISODE_EXPLICIT.search(normalize_text(text))
     
     if match:
-        groups = match.groups()
-        s = groups[0] or groups[2]
-        e = groups[1] or groups[3]
+        g = match.groups()
+        s, e = g[0] or g[2] or g[4], g[1] or g[3] or g[5]
         if s is not None and e is not None:
             try:
                 return int(s), int(e)
@@ -54,13 +62,11 @@ def extract_season_episode_pair(text: str) -> Optional[Tuple[int, int]]:
     return None
 
 def extract_standalone_episode(text: str) -> Optional[int]:
-    match = RE_EPISODE_ONLY.search(text)
-    if not match:
-        match = RE_EPISODE_ONLY.search(normalize_text(text))
+    match = RE_EPISODE_ONLY.search(text) or RE_EPISODE_ONLY.search(normalize_text(text))
         
     if match:
-        groups = match.groups()
-        e = groups[0] or groups[1]
+        g = match.groups()
+        e = g[0] or g[1]
         if e is not None:
             try:
                 return int(e)
@@ -89,19 +95,7 @@ def parse_video_resolution(raw_name: str) -> str:
     return RES_UNKNOWN
 
 def get_resolution_score(res: str) -> int:
-    if res == RES_4K:
-        return 60
-    if res == RES_1080P:
-        return 50
-    if res == RES_720P:
-        return 40
-    if res == RES_480P:
-        return 30
-    if res == RES_360P:
-        return 20
-    if res in (RES_CAM, RES_SCR):
-        return -10
-    return 0
+    return _RES_SCORES.get(res, 0)
 
 class VideoMatcher:
     def __init__(self, score_threshold: int = 55):
@@ -122,7 +116,6 @@ class VideoMatcher:
         
         has_title = norm_title in norm_combined
         if not has_title:
-            # Word-by-word fallback check
             keywords = norm_title.split()
             words_in_combined = norm_combined.split()
             if keywords and all(kw in words_in_combined for kw in keywords):
@@ -173,7 +166,7 @@ class VideoMatcher:
         return max(0, min(100, score))
 
     def make_movie_search_queries(self, title: str, year: Optional[int] = None) -> List[str]:
-        clean_name = title.replace(":", "").replace("  ", " ").strip()
+        clean_name = title.replace(":", "").replace("-", " ").replace("  ", " ").strip()
         queries = []
         if year is not None:
             queries.append(f"{clean_name} {year}")
@@ -181,12 +174,13 @@ class VideoMatcher:
         
         deduped = []
         for q in queries:
-            if q not in deduped:
-                deduped.append(q)
+            lowered = q.lower()
+            if lowered not in deduped:
+                deduped.append(lowered)
         return deduped
 
     def make_series_search_queries(self, title: str, season: int, episode: int) -> List[str]:
-        clean_name = title.replace(":", "").replace("  ", " ").strip()
+        clean_name = title.replace(":", "").replace("-", " ").replace("  ", " ").strip()
         
         s = str(season)
         e = str(episode)
@@ -194,8 +188,12 @@ class VideoMatcher:
         e_padded = e.zfill(2)
         
         variations = [
-            f"{clean_name} s{s}e{e}",
+            clean_name,
             f"{clean_name} s{s_padded}e{e_padded}",
+            f"{clean_name} {s}x{e_padded}",
+            f"{clean_name} {s_padded}x{e_padded}",
+            f"{clean_name} s{s}e{e}",
+            f"{clean_name} {s}x{e}",
             f"{clean_name} s{s} e{e}",
             f"{clean_name} s{s_padded} e{e_padded}"
         ]
