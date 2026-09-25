@@ -39,7 +39,35 @@
       "required": true
     },
     "LOG_CHANNEL_ID": {
-      "description": "Optional Telegram channel ID where play/stream logs are recorded",
+      "description": "Optional Telegram channel ID where play/seek/stop logs are recorded (with region time, date, year and play counts)",
+      "required": false
+    },
+    "TIMEZONE": {
+      "description": "Timezone for play logs (e.g. Asia/Kolkata or UTC+05:30, default: UTC)",
+      "required": false
+    },
+    "CONFIG_PASSWORD": {
+      "description": "Password that protects the /configure web setup wizard (set once, then configure everything from the browser)",
+      "required": false
+    },
+    "TMDB_API_KEY": {
+      "description": "Optional TMDB API key for catalog posters, genres and localized titles (falls back to Cinemeta)",
+      "required": false
+    },
+    "TMDB_LANGUAGE": {
+      "description": "Language for TMDB posters/titles, e.g. hi-IN, es-ES (default: en-US)",
+      "required": false
+    },
+    "RATE_LIMIT_ENABLED": {
+      "description": "Enable per-IP rate limiting (true/false). Turn on when sharing the addon publicly",
+      "required": false
+    },
+    "RATE_LIMIT_REQUESTS": {
+      "description": "API requests per window per IP when rate limiting is on (default: 120)",
+      "required": false
+    },
+    "RATE_LIMIT_STREAM_REQUESTS": {
+      "description": "Media range requests per window per IP (default: 600 - keep high for smooth playback)",
       "required": false
     }
   },

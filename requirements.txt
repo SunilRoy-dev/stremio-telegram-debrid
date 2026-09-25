@@ -1,7 +1,8 @@
 fastapi>=0.100.0
 uvicorn[standard]>=0.22.0
 pyrogram>=2.0.0
+anyio>=3.7.0
 python-dotenv>=1.0.0
 httpx>=0.24.0
 markupsafe>=2.1.0
-
+tgcrypto>=1.2.5

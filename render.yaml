@@ -35,3 +35,15 @@ services:
       - key: TIMEZONE
         sync: false
         placeholder: "Optional timezone (e.g. Asia/Kolkata, UTC+05:30) (default: UTC)"
+      - key: CONFIG_PASSWORD
+        sync: false
+        placeholder: "Password to unlock the /configure web setup wizard (recommended)"
+      - key: TMDB_API_KEY
+        sync: false
+        placeholder: "Optional TMDB API key for posters, genres and localized titles"
+      - key: TMDB_LANGUAGE
+        sync: false
+        placeholder: "Optional language for posters/titles (e.g. hi-IN, default: en-US)"
+      - key: RATE_LIMIT_ENABLED
+        sync: false
+        placeholder: "Enable per-IP rate limiting for public sharing (true/false, default: false)"

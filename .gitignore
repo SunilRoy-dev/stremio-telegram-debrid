@@ -156,3 +156,8 @@ cython_debug/
 .idea/
 *.swp
 *.swo
+
+# Persistent addon data (SQLite cache + wizard config with credentials)
+data/
+data_test/
+*.zip
