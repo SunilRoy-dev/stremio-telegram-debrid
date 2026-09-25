@@ -13,9 +13,10 @@ import os
 import secrets
 import asyncio
 import logging
+import time
 import urllib.parse
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
 import cache
@@ -28,6 +29,25 @@ router = APIRouter()
 
 WIZARD_COOKIE = "tg_wizard_session"
 _sessions: set = set()
+_failed_logins: dict = {}
+
+
+def _is_login_throttled(ip: str) -> bool:
+    now = time.time()
+    attempts = [t for t in _failed_logins.get(ip, []) if now - t < 300]
+    _failed_logins[ip] = attempts
+    return len(attempts) >= 5
+
+
+def _record_failed_login(ip: str):
+    now = time.time()
+    attempts = [t for t in _failed_logins.get(ip, []) if now - t < 300]
+    attempts.append(now)
+    _failed_logins[ip] = attempts
+
+
+def _clear_failed_logins(ip: str):
+    _failed_logins.pop(ip, None)
 
 LANGUAGES = [
     ("en-US", "English (US)"), ("en-GB", "English (UK)"), ("hi-IN", "Hindi"), ("es-ES", "Spanish"),
@@ -105,7 +125,7 @@ def _render_password_page(error: str = "", first_run: bool = False) -> str:
             <input id="newPass2" type="password" placeholder="Repeat the password" autocomplete="new-password"></div>
             <button type="submit" class="btn primary">Claim &amp; open wizard</button>
         </form>"""
-        return _wrap_page("Setup", notice, login_mode=True)
+        return _wrap_page("Setup", notice, page_mode="claim")
 
     if not config_store.can_unlock_wizard():
         locked_msg = """
@@ -116,7 +136,7 @@ def _render_password_page(error: str = "", first_run: bool = False) -> str:
                 please add <code>CONFIG_PASSWORD</code> or <code>API_KEY</code> to your environment variables / secrets.
             </div>
         </div>"""
-        return _wrap_page("Locked", locked_msg, login_mode=True)
+        return _wrap_page("Locked", locked_msg, page_mode="locked")
 
     has_api_key = bool(os.getenv("API_KEY", "").strip())
     sub_text = "This configuration wizard is protected. Enter your owner password or API key to unlock it." if has_api_key else "This configuration wizard is protected. Only the owner who deployed this addon (with the password) can unlock it."
@@ -130,7 +150,7 @@ def _render_password_page(error: str = "", first_run: bool = False) -> str:
         <div class="field"><label for="pass">Password</label>
         <input id="pass" type="password" placeholder="{placeholder}" autocomplete="current-password"></div>
         <button type="submit" class="btn primary">Unlock</button>
-    </form>""", login_mode=True)
+    </form>""", page_mode="login")
 
 
 def _render_wizard(values: dict, stats: dict, rate_enabled: bool, watch_logs: bool) -> str:
@@ -237,17 +257,28 @@ def _render_wizard(values: dict, stats: dict, rate_enabled: bool, watch_logs: bo
     </div>
     <p class="foot-note">Saved config lives in <code>data/config.json</code> and survives restarts. Env vars still work as fallback for anything not set here.</p>
     """
-    return _wrap_page("Wizard", html, login_mode=False)
+    return _wrap_page("Wizard", html, page_mode="wizard")
 
 
-def _wrap_page(inner_title: str, body: str, login_mode: bool) -> str:
-    if login_mode:
+def _wrap_page(inner_title: str, body: str, page_mode: str = "wizard") -> str:
+    if page_mode == "login":
         script = """
         document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            if (btn) { btn.disabled = true; btn.textContent = 'Unlocking...'; }
             const res = await fetch('/configure/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({password: document.getElementById('pass').value})});
-            if (res.ok) { location.reload(); } else { const j = await res.json().catch(()=>({})); location.reload(); }
+            if (res.ok) {
+                location.reload();
+            } else {
+                const j = await res.json().catch(()=>({}));
+                alert(j.detail || 'Wrong password');
+                if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+            }
         });
+        """
+    elif page_mode == "claim":
+        script = """
         document.getElementById('claimForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const p1 = document.getElementById('newPass').value, p2 = document.getElementById('newPass2').value;
@@ -256,6 +287,8 @@ def _wrap_page(inner_title: str, body: str, login_mode: bool) -> str:
             if (res.ok) { location.reload(); } else { alert('Failed to claim: ' + (await res.text())); }
         });
         """
+    elif page_mode == "locked":
+        script = ""
     else:
         script = """
         function alertBox(msg, ok) {
@@ -373,8 +406,14 @@ h1 {{ font-family:'Plus Jakarta Sans',sans-serif; font-size:1.7rem; letter-spaci
 </html>"""
 
 
+def _check_wizard_enabled():
+    if getattr(Config, "DISABLE_WIZARD", False):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
 @router.get("/configure", response_class=HTMLResponse)
 async def configure_page(request: Request):
+    _check_wizard_enabled()
     if config_store.is_first_run():
         # Nothing configured and no password anywhere: show the claim page so
         # the actual owner sets the password before anyone can touch the config.
@@ -400,14 +439,20 @@ async def configure_page(request: Request):
 
 @router.post("/configure/login")
 async def configure_login(request: Request):
+    _check_wizard_enabled()
+    client_ip = _client_ip(request)
+    if _is_login_throttled(client_ip):
+        return JSONResponse({"detail": "Too many failed attempts. Try again in 5 minutes."}, status_code=429)
     try:
         body = await request.json()
         password = str(body.get("password", ""))
     except Exception:
         return JSONResponse({"detail": "Invalid request"}, status_code=400)
     if not config_store.verify_wizard_password(password):
-        logger.warning(f"Failed wizard login attempt from {_client_ip(request)}")
+        _record_failed_login(client_ip)
+        logger.warning(f"Failed wizard login attempt from {client_ip}")
         return JSONResponse({"detail": "Wrong password"}, status_code=403)
+    _clear_failed_logins(client_ip)
     token = secrets.token_urlsafe(32)
     _sessions.add(token)
     resp = JSONResponse({"ok": True})
@@ -417,6 +462,7 @@ async def configure_login(request: Request):
 
 @router.post("/configure/claim")
 async def configure_claim(request: Request):
+    _check_wizard_enabled()
     """First-run only: set the owner password, then open the wizard."""
     if config_store.wizard_locked():
         return JSONResponse({"detail": "Already claimed"}, status_code=403)
@@ -441,6 +487,7 @@ async def configure_claim(request: Request):
 
 @router.post("/configure/logout")
 async def configure_logout(request: Request):
+    _check_wizard_enabled()
     token = request.cookies.get(WIZARD_COOKIE, "")
     _sessions.discard(token)
     resp = JSONResponse({"ok": True})
@@ -450,6 +497,7 @@ async def configure_logout(request: Request):
 
 @router.post("/configure/save")
 async def configure_save(request: Request):
+    _check_wizard_enabled()
     if not _authorized(request):
         return JSONResponse({"detail": "Unauthorized - unlock the wizard first"}, status_code=403)
     try:
@@ -512,6 +560,7 @@ async def configure_save(request: Request):
 
 @router.post("/configure/test")
 async def configure_test(request: Request):
+    _check_wizard_enabled()
     if not _authorized(request):
         return JSONResponse({"detail": "Unauthorized"}, status_code=403)
     try:
@@ -573,6 +622,7 @@ async def configure_test(request: Request):
 
 @router.post("/configure/clear-cache")
 async def configure_clear_cache(request: Request):
+    _check_wizard_enabled()
     if not _authorized(request):
         return JSONResponse({"detail": "Unauthorized"}, status_code=403)
     try:

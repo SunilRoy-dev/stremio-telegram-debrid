@@ -43,6 +43,7 @@ class Config:
 
     # --- New: wizard password (plaintext via env; hashed in config file) ---
     CONFIG_PASSWORD = os.getenv("CONFIG_PASSWORD", "")
+    DISABLE_WIZARD = _env_bool("DISABLE_WIZARD", "false")
 
     @classmethod
     def apply_file_overrides(cls):
