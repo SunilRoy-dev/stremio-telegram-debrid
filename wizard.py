@@ -59,12 +59,37 @@ LANGUAGES = [
 ]
 
 
+def _is_valid_token(token: str) -> bool:
+    if not token or not isinstance(token, str):
+        return False
+    tok = token.strip()
+    if tok in _sessions:
+        return True
+    try:
+        if cache.cache_get("wizard_session", tok):
+            _sessions.add(tok)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _authorized(request: Request) -> bool:
-    # Access is granted ONLY via a session cookie obtained by unlocking with the
-    # password (or claiming it on first run). This prevents strangers from
-    # using or changing the configuration on public deployments.
-    token = request.cookies.get(WIZARD_COOKIE, "")
-    return token in _sessions and token != ""
+    # 1. Cookie
+    cookie_token = request.cookies.get(WIZARD_COOKIE, "")
+    if _is_valid_token(cookie_token):
+        return True
+    # 2. Query param ?token= (needed when embedded in iframes where browsers block 3rd-party cookies)
+    query_token = request.query_params.get("token", "")
+    if _is_valid_token(query_token):
+        return True
+    # 3. Header x-wizard-token or Authorization: Bearer <token>
+    header_token = request.headers.get("x-wizard-token", "") or request.headers.get("authorization", "")
+    if header_token.startswith("Bearer "):
+        header_token = header_token[7:].strip()
+    if _is_valid_token(header_token):
+        return True
+    return False
 
 
 def _client_ip(request: Request) -> str:
@@ -263,18 +288,32 @@ def _render_wizard(values: dict, stats: dict, rate_enabled: bool, watch_logs: bo
 def _wrap_page(inner_title: str, body: str, page_mode: str = "wizard") -> str:
     if page_mode == "login":
         script = """
+        const saved = localStorage.getItem('tg_wizard_token');
+        if (saved && !window.location.search.includes('token=')) {
+            window.location.replace('/configure?token=' + encodeURIComponent(saved));
+        }
+
         document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = e.target.querySelector('button[type="submit"]');
             if (btn) { btn.disabled = true; btn.textContent = 'Unlocking...'; }
-            const res = await fetch('/configure/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({password: document.getElementById('pass').value})});
-            if (res.ok) {
-                location.reload();
-            } else {
-                const j = await res.json().catch(()=>({}));
+            try {
+                const res = await fetch('/configure/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({password: document.getElementById('pass').value})
+                });
+                const j = await res.json().catch(() => ({}));
+                if (res.ok && j.token) {
+                    localStorage.setItem('tg_wizard_token', j.token);
+                    window.location.replace('/configure?token=' + encodeURIComponent(j.token));
+                    return;
+                }
                 alert(j.detail || 'Wrong password');
-                if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+            } catch (err) {
+                alert('Connection error: ' + err);
             }
+            if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
         });
         """
     elif page_mode == "claim":
@@ -283,14 +322,37 @@ def _wrap_page(inner_title: str, body: str, page_mode: str = "wizard") -> str:
             e.preventDefault();
             const p1 = document.getElementById('newPass').value, p2 = document.getElementById('newPass2').value;
             if (!p1 || p1 !== p2) { alert('Passwords must match and not be empty'); return; }
-            const res = await fetch('/configure/claim', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({password: p1})});
-            if (res.ok) { location.reload(); } else { alert('Failed to claim: ' + (await res.text())); }
+            const btn = e.target.querySelector('button[type="submit"]');
+            if (btn) { btn.disabled = true; btn.textContent = 'Claiming...'; }
+            try {
+                const res = await fetch('/configure/claim', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({password: p1})});
+                const j = await res.json().catch(() => ({}));
+                if (res.ok && j.token) {
+                    localStorage.setItem('tg_wizard_token', j.token);
+                    window.location.replace('/configure?token=' + encodeURIComponent(j.token));
+                    return;
+                }
+                alert('Failed to claim: ' + (j.detail || 'Unknown error'));
+            } catch (err) {
+                alert('Connection error: ' + err);
+            }
+            if (btn) { btn.disabled = false; btn.textContent = 'Claim & open wizard'; }
         });
         """
     elif page_mode == "locked":
         script = ""
     else:
         script = """
+        const currentToken = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('tg_wizard_token') || '';
+        if (currentToken) {
+            localStorage.setItem('tg_wizard_token', currentToken);
+        }
+        function authHeaders() {
+            const h = {'Content-Type': 'application/json'};
+            const tok = localStorage.getItem('tg_wizard_token');
+            if (tok) h['x-wizard-token'] = tok;
+            return h;
+        }
         function alertBox(msg, ok) {
             const box = document.getElementById('alerts');
             box.innerHTML = `<div class="alert ${ok ? 'success' : 'error'}">${msg}</div>`;
@@ -302,8 +364,8 @@ def _wrap_page(inner_title: str, body: str, page_mode: str = "wizard") -> str:
                 const k = el.dataset.key;
                 if (el.type === 'checkbox') { data[k] = el.checked; return; }
                 let v = el.value.trim();
-                if (v === '') return;                    // empty = keep existing
-                if (v.includes('••••')) return;          // masked placeholder = unchanged
+                if (v === '') return;
+                if (v.includes('••••')) return;
                 data[k] = v;
             });
             return data;
@@ -312,10 +374,16 @@ def _wrap_page(inner_title: str, body: str, page_mode: str = "wizard") -> str:
             const btn = document.getElementById('btnSave');
             btn.disabled = true; btn.textContent = 'Validating & applying...';
             try {
-                const res = await fetch('/configure/save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(collect())});
+                const tok = localStorage.getItem('tg_wizard_token');
+                const url = tok ? '/configure/save?token=' + encodeURIComponent(tok) : '/configure/save';
+                const res = await fetch(url, {method:'POST', headers: authHeaders(), body: JSON.stringify(collect())});
                 const j = await res.json();
-                if (res.ok && j.ok) { alertBox('Saved & applied! ' + (j.note || ''), true); setTimeout(()=>location.reload(), 2500); }
-                else { alertBox('Error: ' + (j.errors ? j.errors.join(' | ') : (j.detail || 'unknown')), false); }
+                if (res.ok && j.ok) {
+                    alertBox('Saved & applied! ' + (j.note || ''), true);
+                    setTimeout(() => location.reload(), 2500);
+                } else {
+                    alertBox('Error: ' + (j.errors ? j.errors.join(' | ') : (j.detail || 'unknown')), false);
+                }
             } catch (err) { alertBox('Request failed: ' + err, false); }
             btn.disabled = false; btn.textContent = 'Save & apply';
         });
@@ -323,20 +391,27 @@ def _wrap_page(inner_title: str, body: str, page_mode: str = "wizard") -> str:
             const el = document.getElementById('testResult');
             el.textContent = ' Testing... (may take ~15s)';
             try {
-                const res = await fetch('/configure/test', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(collect())});
+                const tok = localStorage.getItem('tg_wizard_token');
+                const url = tok ? '/configure/test?token=' + encodeURIComponent(tok) : '/configure/test';
+                const res = await fetch(url, {method:'POST', headers: authHeaders(), body: JSON.stringify(collect())});
                 const j = await res.json();
                 el.textContent = j.ok ? ' ✓ Connected as ' + j.user : ' ✗ ' + (j.detail || 'Connection failed');
             } catch (err) { el.textContent = ' ✗ ' + err; }
         });
         document.getElementById('btnClearCache')?.addEventListener('click', async () => {
             if (!confirm('Delete all cached search results and watch history?')) return;
-            const res = await fetch('/configure/clear-cache', {method:'POST'});
+            const tok = localStorage.getItem('tg_wizard_token');
+            const url = tok ? '/configure/clear-cache?token=' + encodeURIComponent(tok) : '/configure/clear-cache';
+            const res = await fetch(url, {method:'POST', headers: authHeaders()});
             alertBox(res.ok ? 'Cache cleared.' : 'Failed to clear cache.', res.ok);
-            setTimeout(()=>location.reload(), 1200);
+            setTimeout(() => location.reload(), 1200);
         });
         document.getElementById('btnLogout')?.addEventListener('click', async () => {
-            await fetch('/configure/logout', {method:'POST'});
-            location.reload();
+            try {
+                await fetch('/configure/logout', {method:'POST', headers: authHeaders()});
+            } catch(e) {}
+            localStorage.removeItem('tg_wizard_token');
+            window.location.replace('/configure');
         });
         """
     return f"""<!DOCTYPE html>
@@ -455,8 +530,12 @@ async def configure_login(request: Request):
     _clear_failed_logins(client_ip)
     token = secrets.token_urlsafe(32)
     _sessions.add(token)
-    resp = JSONResponse({"ok": True})
-    resp.set_cookie(WIZARD_COOKIE, token, httponly=True, samesite="lax", max_age=12 * 3600)
+    try:
+        cache.cache_set("wizard_session", token, True, ttl=12 * 3600)
+    except Exception:
+        pass
+    resp = JSONResponse({"ok": True, "token": token})
+    resp.set_cookie(WIZARD_COOKIE, token, httponly=False, samesite="none", secure=True, max_age=12 * 3600)
     return resp
 
 
@@ -480,18 +559,29 @@ async def configure_claim(request: Request):
     Config.apply_file_overrides()
     token = secrets.token_urlsafe(32)
     _sessions.add(token)
-    resp = JSONResponse({"ok": True})
-    resp.set_cookie(WIZARD_COOKIE, token, httponly=True, samesite="lax", max_age=12 * 3600)
+    try:
+        cache.cache_set("wizard_session", token, True, ttl=12 * 3600)
+    except Exception:
+        pass
+    resp = JSONResponse({"ok": True, "token": token})
+    resp.set_cookie(WIZARD_COOKIE, token, httponly=False, samesite="none", secure=True, max_age=12 * 3600)
     return resp
 
 
 @router.post("/configure/logout")
 async def configure_logout(request: Request):
     _check_wizard_enabled()
-    token = request.cookies.get(WIZARD_COOKIE, "")
+    token = request.cookies.get(WIZARD_COOKIE, "") or request.headers.get("x-wizard-token", "") or request.query_params.get("token", "")
     _sessions.discard(token)
+    try:
+        if cache.conn is not None and token:
+            with cache._db_lock:
+                cache.conn.execute("DELETE FROM kv_cache WHERE ns='wizard_session' AND key=?", (token,))
+                cache.conn.commit()
+    except Exception:
+        pass
     resp = JSONResponse({"ok": True})
-    resp.delete_cookie(WIZARD_COOKIE)
+    resp.delete_cookie(WIZARD_COOKIE, samesite="none", secure=True)
     return resp
 
 
