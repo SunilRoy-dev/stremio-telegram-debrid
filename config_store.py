@@ -110,7 +110,7 @@ def save_file_config(data: dict) -> bool:
 
 
 def verify_wizard_password(password: str) -> bool:
-    """Check a password against env CONFIG_PASSWORD or the stored hash."""
+    """Check a password against stored hash, CONFIG_PASSWORD, or API_KEY fallback."""
     if not password:
         return False
     file_cfg = load_file_config()
@@ -120,15 +120,37 @@ def verify_wizard_password(password: str) -> bool:
     env_pass = os.getenv("CONFIG_PASSWORD", "").strip()
     if env_pass:
         return hmac.compare_digest(password, env_pass)
+    # Fallback to API_KEY if CONFIG_PASSWORD is not set
+    api_key = os.getenv("API_KEY", "").strip()
+    if api_key:
+        return hmac.compare_digest(password, api_key)
+    return False
+
+
+def can_unlock_wizard() -> bool:
+    """Check if an unlock method exists (stored hash, CONFIG_PASSWORD, or API_KEY)."""
+    file_cfg = load_file_config()
+    if file_cfg.get("CONFIG_PASSWORD"):
+        return True
+    if os.getenv("CONFIG_PASSWORD", "").strip():
+        return True
+    if os.getenv("API_KEY", "").strip():
+        return True
     return False
 
 
 def is_first_run() -> bool:
-    """Wizard is openly claimable only when no password exists anywhere and nothing saved yet."""
+    """Wizard is openly claimable only on completely unconfigured fresh instances with no existing credentials."""
     file_cfg = load_file_config()
     if file_cfg:
         return False
-    return not os.getenv("CONFIG_PASSWORD", "").strip()
+    if os.getenv("CONFIG_PASSWORD", "").strip():
+        return False
+    # If the instance already has Telegram credentials or an API key configured,
+    # NEVER allow an open first-run claim by random visitors on public deployments!
+    if os.getenv("API_ID") or os.getenv("API_KEY") or os.getenv("BOT_TOKEN") or os.getenv("USER_SESSION_STRING"):
+        return False
+    return True
 
 
 def wizard_locked() -> bool:

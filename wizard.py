@@ -107,13 +107,28 @@ def _render_password_page(error: str = "", first_run: bool = False) -> str:
         </form>"""
         return _wrap_page("Setup", notice, login_mode=True)
 
+    if not config_store.can_unlock_wizard():
+        locked_msg = """
+        <div class="login-box">
+            <h2>Wizard Locked</h2>
+            <div class="alert info" style="margin-top: 14px; text-align: left;">
+                This instance has credentials configured via environment variables. To access the web wizard,
+                please add <code>CONFIG_PASSWORD</code> or <code>API_KEY</code> to your environment variables / secrets.
+            </div>
+        </div>"""
+        return _wrap_page("Locked", locked_msg, login_mode=True)
+
+    has_api_key = bool(os.getenv("API_KEY", "").strip())
+    sub_text = "This configuration wizard is protected. Enter your owner password or API key to unlock it." if has_api_key else "This configuration wizard is protected. Only the owner who deployed this addon (with the password) can unlock it."
+    placeholder = "Enter owner password or API key" if has_api_key else "Enter the owner password"
+
     return _wrap_page("Locked", f"""
     <form id="loginForm" class="login-box">
         <h2>Owner access</h2>
-        <p class="sub">This configuration wizard is protected. Only the owner who deployed this addon (with the password) can unlock it.</p>
+        <p class="sub">{sub_text}</p>
         {err}
         <div class="field"><label for="pass">Password</label>
-        <input id="pass" type="password" placeholder="Enter the owner password" autocomplete="current-password"></div>
+        <input id="pass" type="password" placeholder="{placeholder}" autocomplete="current-password"></div>
         <button type="submit" class="btn primary">Unlock</button>
     </form>""", login_mode=True)
 
