@@ -15,6 +15,9 @@ from pyrogram.types import Message
 
 logger = logging.getLogger("zip_helper")
 
+# Keep strong references to background tasks so they are not garbage-collected mid-flight
+_background_tasks = set()
+
 VIDEO_EXTENSIONS = ('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.ts', '.m4v')
 
 def is_video_file(filename: str) -> bool:
@@ -210,8 +213,10 @@ async def zip_compressed_generator(reader: TelegramSeekableReader, entry_name: s
         finally:
             asyncio.run_coroutine_threadsafe(send_stream.aclose(), loop).result()
 
-    # Start the background thread
-    asyncio.create_task(anyio.to_thread.run_sync(thread_worker))
+    # Start the background thread (strongly referenced so it can't be GC'd mid-stream)
+    task = asyncio.create_task(anyio.to_thread.run_sync(thread_worker))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     
     async with receive_stream:
         async for chunk in receive_stream:

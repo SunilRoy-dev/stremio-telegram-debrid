@@ -12,11 +12,12 @@ from pyrogram.types import Message
 from pyrogram.session.auth import Auth
 from pyrogram.session import Session
 from pyrogram.file_id import FileId, FileType, ThumbnailSource
-from pyrogram.errors import VolumeLocNotFound, CDNFileHashMismatch
+from pyrogram.errors import VolumeLocNotFound, CDNFileHashMismatch, FloodWait
 from pyrogram.crypto import aes
 import pyrogram
 from config import Config
 from utils import parse_split_info
+import cache
 
 logger = logging.getLogger("tg_client")
 
@@ -28,7 +29,7 @@ async def _patched_auth_create(self):
     if self.dc_id in _auth_key_cache:
         logger.info(f"Reusing cached auth key for DC{self.dc_id}")
         return _auth_key_cache[self.dc_id]
-    
+
     logger.info(f"Generating new auth key for DC{self.dc_id}...")
     key = await _original_auth_create(self)
     _auth_key_cache[self.dc_id] = key
@@ -268,13 +269,20 @@ class TelegramClientManager:
     def __init__(self):
         self.client = None
         self.is_running = False
-        self._search_cache = {}
-        self._message_cache = {}
+        self._search_cache = {}          # small L1; authoritative cache lives in SQLite
+        self._message_cache = {}         # small L1
         self._log_cache = {}
+        self._tg_semaphore = asyncio.Semaphore(2)   # max 2 concurrent Telegram searches (anti-ban)
+        self._tg_spacing_lock = asyncio.Lock()
+        self._last_tg_call = 0.0
+        self._flood_wait_until = 0.0
 
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
     def initialize(self):
         Config.validate()
-        
+
         if Config.USER_SESSION_STRING:
             logger.info("Initializing User Client...")
             self.client = Client(
@@ -298,37 +306,19 @@ class TelegramClientManager:
         else:
             raise ValueError("Neither USER_SESSION_STRING nor BOT_TOKEN is configured!")
 
-    def get_channel_ids(self) -> list:
-        val = Config.TELEGRAM_CHANNEL_ID
-        if not val:
-            return []
-        if isinstance(val, int):
-            return [val]
-        parts = [p.strip() for p in str(val).split(",")]
-        ids = []
-        for p in parts:
-            if p.startswith("-") or p.isdigit():
-                try:
-                    ids.append(int(p))
-                except ValueError:
-                    ids.append(p)
-            else:
-                ids.append(p)
-        return ids
-
     async def start(self):
         if not self.client:
             self.initialize()
-        
+
         if not self.is_running:
             logger.info("Starting Pyrogram client...")
             await self.client.start()
             self.is_running = True
-            
+
             # Resolve target channels on startup to avoid PeerIdInvalid errors
             try:
                 chat_ids = self.get_channel_ids()
-                
+
                 if Config.USER_SESSION_STRING:
                     cached_count = 0
                     async for dialog in self.client.get_dialogs(limit=400):
@@ -337,13 +327,13 @@ class TelegramClientManager:
                             cached_count += 1
                             if cached_count >= len(chat_ids):
                                 break
-                
+
                 for chat_id in chat_ids:
                     try:
                         await self.client.get_chat(chat_id)
                     except Exception as e:
                         logger.warning(f"Failed to cache channel {chat_id}: {e}")
-                        
+
                 if Config.LOG_CHANNEL_ID:
                     try:
                         await self.client.get_chat(Config.LOG_CHANNEL_ID)
@@ -363,99 +353,220 @@ class TelegramClientManager:
                 logger.warning(f"Error stopping Pyrogram client: {e}")
             self.is_running = False
 
-    async def send_play_log(self, filename: str, chat_id: Union[str, int], message_id: int):
-        if not Config.LOG_CHANNEL_ID:
-            return
-            
-        key = (chat_id, message_id)
-        now = time.time()
-        
-        # Avoid duplicate logs for the same file within 15 mins
-        if key in self._log_cache and now - self._log_cache[key] < 900:
-            return
-                
-        self._log_cache[key] = now
-        
+    async def reconfigure(self):
+        """Restart the Telegram client after the config wizard saved new credentials."""
+        await self.stop()
+        self.client = None
+        self.is_running = False
+        self._search_cache.clear()
+        self._message_cache.clear()
+        self._log_cache.clear()
+        await self.start()
+
+    def get_channel_ids(self) -> list:
+        val = Config.TELEGRAM_CHANNEL_ID
+        if not val:
+            return []
+        if isinstance(val, int):
+            return [val]
+        parts = [p.strip() for p in str(val).split(",")]
+        ids = []
+        for p in parts:
+            if p.startswith("-") or p.isdigit():
+                try:
+                    ids.append(int(p))
+                except ValueError:
+                    ids.append(p)
+            else:
+                ids.append(p)
+        return ids
+
+    # ------------------------------------------------------------------
+    # Anti-ban throttle: min spacing between Telegram search calls
+    # ------------------------------------------------------------------
+    async def _throttle(self):
+        async with self._tg_spacing_lock:
+            now = time.time()
+            wait = self._last_tg_call + 0.35 - now
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._last_tg_call = time.time()
+
+    async def _respect_flood_wait(self):
+        remaining = self._flood_wait_until - time.time()
+        if remaining > 0:
+            logger.warning(f"FloodWait backoff active, sleeping {remaining:.1f}s")
+            await asyncio.sleep(min(remaining, 60))
+
+    # ------------------------------------------------------------------
+    # Play logs to the configured Telegram log channel
+    # ------------------------------------------------------------------
+    def _local_now(self):
+        import datetime
+        from datetime import timezone, timedelta
+
+        tz_str = getattr(Config, "TIMEZONE", "UTC") or "UTC"
+        local_dt = None
+
         try:
-            import datetime
-            from datetime import timezone, timedelta
-            
-            tz_str = getattr(Config, "TIMEZONE", "UTC") or "UTC"
-            local_dt = None
-            
+            from zoneinfo import ZoneInfo
+            local_dt = datetime.datetime.now(ZoneInfo(tz_str))
+        except Exception:
+            pass
+
+        if local_dt is None:
             try:
-                from zoneinfo import ZoneInfo
-                local_dt = datetime.datetime.now(ZoneInfo(tz_str))
+                tz_clean = tz_str.upper().replace("UTC", "").replace("GMT", "").strip()
+                if tz_clean and tz_clean[0] in ("+", "-"):
+                    sign = 1 if tz_clean[0] == "+" else -1
+                    time_parts = tz_clean[1:].split(":")
+                    hours = int(time_parts[0])
+                    minutes = int(time_parts[1]) if len(time_parts) > 1 else 0
+                    td = timedelta(hours=hours, minutes=minutes)
+                    local_dt = datetime.datetime.now(timezone(sign * td))
             except Exception:
                 pass
-                
-            if local_dt is None:
-                try:
-                    tz_clean = tz_str.upper().replace("UTC", "").replace("GMT", "").strip()
-                    if tz_clean and tz_clean[0] in ("+", "-"):
-                        sign = 1 if tz_clean[0] == "+" else -1
-                        time_parts = tz_clean[1:].split(":")
-                        hours = int(time_parts[0])
-                        minutes = int(time_parts[1]) if len(time_parts) > 1 else 0
-                        td = timedelta(hours=hours, minutes=minutes)
-                        local_dt = datetime.datetime.now(timezone(sign * td))
-                except Exception:
-                    pass
-            
-            if local_dt is None:
-                local_dt = datetime.datetime.now(timezone.utc)
-                
+
+        if local_dt is None:
+            local_dt = datetime.datetime.now(timezone.utc)
+        return local_dt
+
+    async def send_watch_log(self, event_type: str, filename: str, chat_id=None,
+                             message_id=None, play_count: int = 1,
+                             progress: str = "", extra: str = ""):
+        """
+        Send a play/watch event to the log channel with the owner's region time,
+        date, year and how many times the file has been played.
+        event_type: "play" | "start" | "seek" | "stop" | "finish"
+        """
+        if not Config.LOG_CHANNEL_ID:
+            return
+        if event_type in ("start", "seek", "stop", "finish") and not Config.WATCH_LOG_EVENTS:
+            return
+
+        key = (event_type, str(chat_id), str(message_id))
+        now = time.time()
+
+        # Avoid duplicate logs for the same file+event within 15 mins
+        if key in self._log_cache and now - self._log_cache[key] < 900:
+            return
+        self._log_cache[key] = now
+
+        # Keep the dedupe map bounded
+        if len(self._log_cache) > 2048:
+            cutoff = now - 1800
+            self._log_cache = {k: v for k, v in self._log_cache.items() if v > cutoff}
+
+        try:
+            local_dt = self._local_now()
             time_str = local_dt.strftime("%Y-%m-%d %H:%M:%S")
             year_str = local_dt.strftime("%Y")
-            
-            message_text = (
-                f"🎬 **Media Stream Log**\n\n"
-                f"📁 **File Name:** `{filename}`\n"
-                f"📅 **Date & Time:** `{time_str}`\n"
-                f"📆 **Year:** `{year_str}`\n"
-                f"💬 **Source Channel:** `{chat_id}`\n"
-                f"🆔 **Message ID:** `{message_id}`"
-            )
-            
+            tz_str = getattr(Config, "TIMEZONE", "UTC") or "UTC"
+
+            icons = {"play": "▶️", "start": "🟢", "seek": "⏩", "stop": "🔴", "finish": "🏁"}
+            titles = {
+                "play": "Media Stream Log",
+                "start": "Playback Started",
+                "seek": "Seek Event",
+                "stop": "Playback Stopped",
+                "finish": "Watched to End",
+            }
+            icon = icons.get(event_type, "🎬")
+            title = titles.get(event_type, "Watch Event")
+
+            lines = [
+                f"{icon} **{title}**",
+                "",
+                f"📁 **File:** `{filename}`",
+                f"📅 **Date & Time:** `{time_str}` ({tz_str})",
+                f"📆 **Year:** `{year_str}`",
+                f"🔁 **Play Count:** `{play_count}`",
+            ]
+            if progress:
+                lines.append(f"📊 **Progress:** `{progress}`")
+            if chat_id is not None:
+                lines.append(f"💬 **Source Channel:** `{chat_id}`")
+            if message_id is not None:
+                lines.append(f"🆔 **Message ID:** `{message_id}`")
+            if extra:
+                lines.append(f"ℹ️ {extra}")
+
             await self.client.send_message(
                 chat_id=Config.LOG_CHANNEL_ID,
-                text=message_text
+                text="\n".join(lines)
             )
         except Exception as e:
             logger.error(f"Failed to send log to log channel: {e}")
 
+    async def send_play_log(self, filename: str, chat_id: Union[str, int], message_id: int):
+        """Backwards compatible play log."""
+        await self.send_watch_log("play", filename, chat_id, message_id, 1)
+
+    # ------------------------------------------------------------------
+    # Search (SQLite-persistent cache + anti-ban throttling)
+    # ------------------------------------------------------------------
     async def search_messages(self, query: str = "", limit: int = 50):
         if not self.is_running:
             await self.start()
-        
+
         query_str = str(query).strip() if query else ""
-        
+
         cache_key = f"{query_str}:{limit}"
         now = time.time()
+
+        # L1: in-memory
         if cache_key in self._search_cache:
             cached_time, cached_results = self._search_cache[cache_key]
             if now - cached_time < Config.CACHE_TTL:
                 return cached_results
 
+        # L2: persistent SQLite cache (survives restarts -> fewer Telegram calls)
+        persisted = cache.search_cache_get(cache_key)
+        if persisted is not None:
+            restored = [cache.dict_to_msg(d) for d in persisted]
+            self._search_cache[cache_key] = (now, restored)
+            return restored
+
+        # Limit concurrent full searches to 2 (single-level acquisition, no nesting)
+        async with self._tg_semaphore:
+            results = await self._search_telegram(query_str, limit, now, cache_key)
+
+        if results is None:
+            # FloodWait backoff was set; return whatever we have (possibly empty)
+            return self._search_cache.get(cache_key, (now, []))[1]
+
+        self._search_cache[cache_key] = (now, results)
+        if len(self._search_cache) > 256:
+            cutoff = now - Config.CACHE_TTL
+            self._search_cache = {k: v for k, v in self._search_cache.items() if v[0] > cutoff}
+        return results
+
+    async def _search_telegram(self, query_str: str, limit: int, now: float, cache_key: str):
         chat_ids = self.get_channel_ids()
         results = []
         per_channel_limit = max(100, limit)
-        
+
+        await self._respect_flood_wait()
+
         for chat_id in chat_ids:
             try:
-                if query_str:
-                    async for msg in self.client.search_messages(chat_id=chat_id, query=query_str, limit=per_channel_limit):
+                await self._throttle()
+                try:
+                    async for msg in self.client.search_messages(chat_id=chat_id, query=query_str, limit=per_channel_limit) if query_str else self.client.get_chat_history(chat_id=chat_id, limit=per_channel_limit):
                         if self._has_media(msg):
                             results.append(msg)
-                else:
-                    async for msg in self.client.get_chat_history(chat_id=chat_id, limit=per_channel_limit):
-                        if self._has_media(msg):
-                            results.append(msg)
+                except FloodWait as e:
+                    self._flood_wait_until = time.time() + min(int(e.value or 10), 120)
+                    logger.warning(f"FloodWait {e.value}s hit during search - backing off")
+                    return None
             except Exception as e:
                 logger.warning(f"Telegram query failed for {chat_id}: {e}")
-        
-        results.sort(key=lambda m: m.date, reverse=True)
-        
+
+        try:
+            results.sort(key=lambda m: m.date, reverse=True)
+        except TypeError:
+            pass
+
         # Resolve all split parts for detected split files to prevent missing segments
         split_bases = set()
         for msg in results:
@@ -464,7 +575,6 @@ class TelegramClientManager:
                 fn = getattr(media, "file_name", "") or msg.caption or ""
                 base, part = parse_split_info(fn)
                 if base:
-                    # Generate a clean, truncated search query for the split base
                     search_query = re.sub(r'[^a-zA-Z0-9\s]', ' ', base)
                     search_query = re.sub(r'\s+', ' ', search_query).strip()
                     words = search_query.split()
@@ -474,37 +584,55 @@ class TelegramClientManager:
                         search_query = " ".join(words[:5])
                     else:
                         search_query = " ".join(words)
-                    for chat_id in chat_ids:
-                        split_bases.add((chat_id, search_query))
-                        
+                    if search_query:
+                        for chat_id in chat_ids:
+                            split_bases.add((chat_id, search_query))
+
         additional_messages = []
         for chat_id, base in split_bases:
             try:
                 logger.info(f"Fetching all split parts matching base: {base}")
-                async for msg in self.client.search_messages(chat_id=chat_id, query=base, limit=100):
-                    if self._has_media(msg):
-                        additional_messages.append(msg)
+                await self._throttle()
+                try:
+                    async for msg in self.client.search_messages(chat_id=chat_id, query=base, limit=100):
+                        if self._has_media(msg):
+                            additional_messages.append(msg)
+                except FloodWait as e:
+                    self._flood_wait_until = time.time() + min(int(e.value or 10), 120)
+                    logger.warning(f"FloodWait {e.value}s hit during split-part search - backing off")
+                    break
             except Exception as e:
                 logger.warning(f"Failed to fetch additional split parts for {base}: {e}")
-                
+
         # Merge and deduplicate by message ID
         deduped = {msg.id: msg for msg in results}
         for msg in additional_messages:
             deduped[msg.id] = msg
-            
+
         final_results = list(deduped.values())
-        final_results.sort(key=lambda m: m.date, reverse=True)
+        try:
+            final_results.sort(key=lambda m: m.date, reverse=True)
+        except TypeError:
+            pass
         final_results = final_results[:limit]
-        
-        self._search_cache[cache_key] = (now, final_results)
+
+        # Persist to SQLite so restarts don't re-hit Telegram
+        try:
+            cache.search_cache_set(cache_key, [cache.msg_to_dict(m) for m in final_results], ttl=Config.CACHE_TTL)
+        except Exception as e:
+            logger.debug(f"Failed persisting search cache: {e}")
+
         return final_results
 
+    # ------------------------------------------------------------------
+    # Single message fetch (persistent cache + fresh-fetch fallback)
+    # ------------------------------------------------------------------
     async def get_message(self, message_id: int, chat_id: int = None) -> Message:
         if not self.is_running:
             await self.start()
-            
+
         target_chat = chat_id if chat_id is not None else self.get_channel_ids()[0]
-        
+
         cache_key = f"{target_chat}:{message_id}"
         now = time.time()
         if cache_key in self._message_cache:
@@ -512,15 +640,25 @@ class TelegramClientManager:
             if now - cached_time < Config.CACHE_TTL:
                 return cached_msg
 
+        # Persistent cache first (message metadata rarely changes)
+        persisted = cache.message_cache_get(target_chat, message_id)
+        if persisted is not None:
+            self._message_cache[cache_key] = (now, persisted)
+            return persisted
+
         try:
             msg = await self.client.get_messages(chat_id=target_chat, message_ids=message_id)
             self._message_cache[cache_key] = (now, msg)
+            try:
+                cache.message_cache_set(msg)
+            except Exception:
+                pass
             return msg
         except Exception as e:
             logger.error(f"Failed to fetch message {message_id} in channel {target_chat}: {e}")
             raise e
 
-    def _has_media(self, msg: Message) -> bool:
+    def _has_media(self, msg) -> bool:
         return bool(msg.video or msg.document or msg.audio)
 
 tg_client_manager = TelegramClientManager()

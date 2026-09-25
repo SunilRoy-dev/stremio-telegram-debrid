@@ -8,4 +8,6 @@ services:
       - "7860:7860"
     env_file:
       - .env
+    volumes:
+      - ./data:/app/data   # persistent SQLite cache + wizard config (survives restarts)
     restart: unless-stopped

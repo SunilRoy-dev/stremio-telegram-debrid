@@ -15,241 +15,224 @@ pinned: false
 [![GitHub Stars](https://img.shields.io/github/stars/SunilRoy-dev/stremio-telegram-debrid?style=for-the-badge&logo=github)](https://github.com/SunilRoy-dev/stremio-telegram-debrid/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/SunilRoy-dev/stremio-telegram-debrid?style=for-the-badge)](https://github.com/SunilRoy-dev/stremio-telegram-debrid/network/members)
 
-
-Stream video, audio, and subtitle files directly from your private Telegram storage channels inside Stremio. This addon serves as a high-speed on-the-fly streaming HTTP proxy (fully supporting Range Requests for instant seek/scrubbing) that integrates your private Telegram channel into your personal Stremio library.
+Turn your private Telegram channels into a personal streaming library for Stremio. You put your own video files on a channel, connect this addon once, and everything shows up inside Stremio with real posters, clean part lists and instant playback. Nothing gets downloaded first — when you press play, the addon pulls the file straight from Telegram and streams it to your player as you watch.
 
 ### Why I built this
-I store my personal media files on a private Telegram channel. I wanted a way to play them directly on my TV through Stremio without paying for Debrid links or downloading the files first.so I wrote this lightweight, database-free Python script to serve as a fast streaming proxy with subtitle loading and instant skipping.
 
-Contributions and bug reports are welcome! If you encounter issues, feel free to open a GitHub Issue, or submit a Pull Request with your improvements. All pull requests will be reviewed and merged accordingly.
+I keep my files on a private Telegram channel and wanted to watch them on my TV through Stremio without downloading every file first or running a media server at home. Everything I found either needed a paid subscription, a home server running around the clock, or an afternoon of configuration. So I wrote this. It started as a tiny weekend script and slowly grew into what you see here — a setup wizard, home screen catalogs, watch progress, the works.
 
-> [!NOTE]
-> **Show Your Support!** ⭐
-> If you find this project useful, please **leave a star on the repository** before you fork, clone, or deploy it. Your stars help keep this project active and maintained!
-
----
-
-## 🚀 Quick Start (For Beginners)
-
-Here is a simplified step-by-step roadmap to get the addon running on your phone or computer in less than 5 minutes:
-
-| Step | Action | Where to do it |
-| :--- | :--- | :--- |
-| **1. Fork the Project** | Click **Fork** at the top of this GitHub repository to copy it to your own GitHub account. | GitHub (this webpage) |
-| **2. Get Keys** | Go to [my.telegram.org](https://my.telegram.org) and generate your 'API_ID' and 'API_HASH' keys (see [Setup Help](#1-how-to-get-telegram-api-id--api-hash)). | Telegram Website |
-| **3. Get Session** | Run the Python script on [Computer](#how-to-generate-user_session_string-locally) or [Mobile](#how-to-generate-user_session_string-on-mobile-no-computer-needed) to get your 'USER_SESSION_STRING'. | Local computer or Mobile Phone |
-| **4. Deploy** | Choose a hosting platform (e.g., Koyeb, Render, Railway, or Hugging Face) and deploy the addon (see [Deployment Options](#one-click-deploy--setup-options)). Enter your environment variables in the settings. | Hosting Provider |
-| **5. Install** | Copy the manifest URL of your deployed app and paste it into the 'Add-ons' section of Stremio (see the [Stremio Installation Guide](#how-to-install-in-stremio)). | Stremio App |
-
-### Setup Helpers:
-* **How to get Telegram API Keys**:
-  1. Go to [my.telegram.org](https://my.telegram.org), log in using your Telegram phone number (in international format, e.g., `+1234567890`), and enter the confirmation code sent to your Telegram app.
-  2. Click **API development tools**.
-  3. Fill in the **App title** and **Short name** (these can be anything, e.g. `tgaddon`). You can leave other fields blank/default.
-  4. Submit and copy your `api_id` and `api_hash`. (If you get an error saving, try turning off your VPN/adblocker, or use a private window).
-* **How to find your Private Channel ID**:
-  1. Create a channel in Telegram and set it to **Private**.
-  2. To get the ID, log in to Telegram Web (`web.telegram.org`), click on your private channel, and check the URL in your browser. It should look like `https://web.telegram.org/a/#-1001234567890`. That 13-digit number starting with `-100` (e.g. `-1001234567890`) is your `TELEGRAM_CHANNEL_ID`.
-  3. Alternatively, post a message in your channel, forward it to a bot like `@MissRose_bot` or `@username_to_id_bot`, and it will reply with the channel's ID.
-
----
-
-## One-Click Deploy & Setup Options
-
-Deploy your own instance of the Telegram Stremio Addon instantly using any of the services below:
-
-| Platform | Deployment Type / Limitations | Deploy Button |
-| :--- | :--- | :--- |
-| **Hugging Face Spaces** | Paid/PRO Tier (Docker Spaces are no longer available on the Free Tier — Requires a PRO subscription) | [Manual Setup Guide](#hugging-face-spaces-setup-guide) |
-| **Render** | Free Hobby Tier (5GB Bandwidth Limit & Auto-Sleeps) | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/SunilRoy-dev/stremio-telegram-debrid) |
-| **Koyeb** | Free Edge Tier (Continuous — Requires Card Verification) | [![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&repository=github.com/SunilRoy-dev/stremio-telegram-debrid&branch=main&name=stremio-telegram-debrid) |
-| **Heroku** | Paid / Eco Tier (Stable & Continuous, starts at $5/month) | [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy/?template=https://github.com/SunilRoy-dev/stremio-telegram-debrid) |
-| **Railway** | Trial Tier (Limited Credits, approx. 500 hours/month) | [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/SunilRoy-dev/stremio-telegram-debrid) |
-| **Zeabur** | Trial Tier (Limited Credits) | [![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/templates/deploy?template=https://github.com/SunilRoy-dev/stremio-telegram-debrid) |
-| **Google Colab** | Free Tier (Temporary Runtime — Exposes app via Ngrok tunnel) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/SunilRoy-dev/stremio-telegram-debrid/blob/beta/deployment/colab/deploy_colab.ipynb) |
-
-*Please read the **[Deployment Platform Specs and Limitations](#deployment-platform-specs-and-limitations)** section below before selecting a hosting provider.*
-
----
-
-## 🌟 Key Features Explained (Beginner-Friendly)
-
-* **Smart Search & Quality Sorting**: 
-  - *What it is:* When you search or click play in Stremio, the addon automatically finds the right files in your Telegram channel.
-  - *How it helps:* It reads both your file names and message captions (supporting formats like `S01E01` or `1x01`) and sorts the video streams by quality (4K, 1080p, 720p) so you see the best choice first.
-* **Auto-Refreshing Stream Links**: 
-  - *What it is:* Telegram file links naturally expire after a few hours. If you pause a stream for a long time, the original link breaks.
-  - *How it helps:* The addon automatically detects this and fetches a fresh download link from Telegram in the background, letting you resume playing smoothly without errors.
-* **Buffering-Bypass (No Lag)**: 
-  - *What it is:* Many deployment servers (like Hugging Face or Render) use proxies that try to download the entire video before sending it to you.
-  - *How it helps:* The addon forces them to disable buffering (`X-Accel-Buffering: no`), meaning the video starts playing instantly in Stremio.
-* **Stitched Split Streaming**: 
-  - *What it is:* Telegram limits uploads to 2GB or 4GB. To bypass this, you might split a large video into parts (like `.001`, `.002`, or `part1`, `part2`).
-  - *How it helps:* The addon automatically matches these parts and stitches them into a single, continuous virtual video stream in Stremio.
-* **Smart Segment Filtering**: 
-  - *What it is:* Prevents naming clashes between separate video parts (like Part 1 vs. Part 2) in your channel.
-  - *How it helps:* It filters your channel search results so you only query and play the exact file segments you select.
-* **ZIP Archive Streaming**: 
-  - *What it is:* You can upload videos compressed inside a `.zip` file (or split ZIP parts) to your channel.
-  - *How it helps:* The addon reads the ZIP contents and plays the video files directly in Stremio. *(Note: Fast-forwarding/seeking doesn't work for ZIP files because the server has to extract from the beginning to reach the seek point. Upload files directly as `.mp4`/`.mkv` for full seeking support!)*
-* **Automatic Subtitles**: 
-  - *What it is:* Subtitle files uploaded to your channel alongside the videos.
-  - *How it helps:* The addon scans for matching subtitle files (`.srt`, `.vtt`, `.ass`) and automatically injects them into Stremio, mapping English, Spanish, or French tracks.
-* **High-Speed Scrubbing & Seeking**: 
-  - *What it is:* Supports range requests (`HTTP 206`), letting you ask for specific parts of a file.
-  - *How it helps:* You can fast-forward or rewind instantly in external players like VLC or MPV without loading delays.
-* **Zero Disk Usage**: 
-  - *What it is:* In-memory chunk streaming.
-  - *How it helps:* Your deployment server's hard drive is never used to store video chunks, which prevents storage limits from getting exceeded.
-* **Fast Loading & Session Reuse**: 
-  - *What it is:* Usually, downloading a file chunk opens a brand-new login channel to Telegram, which is slow and can get your account rate-limited.
-  - *How it helps:* The addon uses a patched connection logic to reuse login channels, making video chunks load instantly and safely.
-  - *Note for Bots:* This speed optimization requires a User Session (`USER_SESSION_STRING`). Standard Bots (`BOT_TOKEN`) cannot use connection caching, have strict 2GB file size limits, and may fail or time out on larger files. Using a User Session is highly recommended for a stable experience.
-* **Modern Python Support**: 
-  - *What it is:* Python 3.12 and newer versions changed how task loops run, which can cause older scripts to crash.
-  - *How it helps:* The addon is fully optimized to run on the latest Python base configurations, making VPS or Docker deployments extremely stable without crashes.
-* **Secure Access Control**: 
-  - *What it is:* Locking your addon with a private password (`API_KEY`).
-  - *How it helps:* Prevents unauthorized users from accessing your Stremio addon link and consuming your server bandwidth.
-* **Play Logging**: 
-  - *What it is:* Integration with a private Telegram channel.
-  - *How it helps:* Sends live playback history reports (file name, time, source channel) directly to a personal log channel.
-
----
-
-## Stitched Split Streaming
+Found a bug, or something in this guide confusing? Please open an Issue. Pull requests are welcome too.
+*Dont ask for piracy related questions*
 
 > [!NOTE]
-> **Stitched Split Streaming is in an early experimental stage.**
-> While the addon attempts to stitch split files together on the fly, this feature is highly experimental and may or may not work consistently depending on your media player's streaming logic.
-
-If you have large media files (e.g., 4K HDR video backups) that exceed Telegram's file upload limits (2GB for bots, 4GB for user accounts), you can split them into smaller segments before uploading. The addon automatically detects, groups, and stitches them back together into a single virtual stream.
-
-### Supported Split Formats
-The addon parses standard split archive conventions including:
-* **Numeric extensions**: `Video.mkv.001`, `Video.mkv.002`, `Video.mkv.003`...
-* **Part indicators**: `Video.part1.rar`, `Video.part2.rar`, `Video.part3.rar`... (or `.part01.mkv`, `.part02.mkv`...)
-* **Suffix delimiters**: `Video_part_1.mp4`, `Video_part_2.mp4`...
-
-### How It Works Under the Hood
-1. **Aggregation**: The catalog handler parses filename patterns and clusters split files together, presenting them as a single item with their total combined file size (e.g., `Stitch stream | 6.2 GB`).
-2. **Dynamic Range Mapping**: When you press play or seek in Stremio, the addon maps the player's byte-range requests to the respective split files on the fly.
-3. **In-Memory Sequential Access**: It downloads only the necessary segments from Telegram DCs and transitions between split messages seamlessly in memory, resulting in uninterrupted playback.
+> If you like this Project, keeping a ⭐ on the repo helps more than you'd think. It keeps me motivated to maintain it.
 
 ---
 
-## ZIP File Support
+## Key Features
 
-> [!CAUTION]
-> **ZIP streaming is NOT recommended for daily use.**
-> Because streaming a video from a ZIP file requires downloading and extracting the archive in the background before playing, it is very resource-intensive, slow to start, and prone to timeouts. For the best streaming experience, always upload your files **directly as video files (e.g. `.mp4`, `.mkv`)** instead of archiving them.
+- **Web setup wizard** — deploy it, open `/configure` in your browser, set an owner password, fill in a form. Done. Environment variables are now optional, not required.
+- **Home screen catalogs with genre rows** — your channel shows up as organized video catalogs in Stremio, and the home page gets genre rows (Action, Drama, Sci-Fi, Documentary and so on) for easy browsing.
+- **Videos grouped the right way** — multi-part and episodic videos are grouped cleanly under one title card with an organized part list, instead of appearing as a pile of loose files.
+- **Posters and titles in your language** — add a free TMDB key, set `TMDB_LANGUAGE` (say `hi-IN` or `es-ES`), and posters, titles and descriptions come back in that language.
+- **Survives restarts** — searches, file details, posters and watch progress now live in a small SQLite database file, so your hosting platform restarting the app no longer wipes anything or repeats the same lookups against Telegram.
+- **Continue Watching** — pause a video halfway, come back tomorrow, and resume seamlessly right from the Continue Watching row on the home screen.
+- **Play logs in a Telegram channel (optional)** — every play, seek and stop can be posted to a log channel of your choice, with your local date, time, year and total play count.
+- **Rate limiting per visitor (optional)** — off by default. Sharing your addon link with friends or a group? Flip one switch so nobody can hog all the bandwidth.
+- **Split files play as one** — big videos that had to be uploaded in parts (Telegram caps uploads at 2GB for regular accounts, 4GB for Premium) get stitched back into a single continuous stream automatically.
+- **Clean catalog presentation** — subtitle and audio files won't clutter video rows, stream links recover automatically if interrupted, and persistent caching prevents hammering Telegram.
 
-You can upload a '.zip' file (or a split ZIP like '.zip.001', '.zip.002', etc.) to your Telegram channel. The addon will automatically look inside the ZIP, find all the video files, and list them in Stremio so you can play them directly!
+---
 
-### ⚠️ Important: Skipping/Seeking does NOT work for ZIPs
-> [!IMPORTANT]
-> **You cannot skip forward or rewind when playing videos that are inside ZIP files.**
-> - **Why?** To skip to a certain part of a video inside a ZIP file, the server has to download and unpack the ZIP file from the very beginning up to that point. For large media files, this takes too much time, and your Stremio player will freeze or disconnect.
-> - **Easy Fix**: If you want to skip/seek through your videos, **do not upload them in a ZIP file**. Upload them **directly as video files ('.mp4', '.mkv', etc.)** or as split video files ('.001', '.002', etc.), and seeking will work perfectly!
+## Getting started in 5 steps
 
+No coding needed. You'll touch a terminal exactly once (to generate a session string), and that's it.
 
+| Step | What you do | Where |
+| :--- | :--- | :--- |
+| **1. Fork this repo** | Click **Fork** at the top of this page. That copies the project to your own GitHub account so you can deploy it. | This page |
+| **2. Get Telegram API keys** | Create free API keys at [my.telegram.org](https://my.telegram.org). Takes about 2 minutes — [walkthrough below](#one-time-setup-telegram-api-keys). | Telegram website |
+| **3. Get a session string** | One small script run on a computer or phone gives you a `USER_SESSION_STRING`. [Computer guide](#how-to-generate-user_session_string-on-your-computer) · [phone guide](#how-to-generate-user_session_string-on-your-phone) | Your device |
+| **4. Deploy it** | Pick a platform from the [deploy options](#where-can-i-deploy-this) and click its deploy button. | Hosting platform |
+| **5. Configure and install** | Open `https://your-deployed-url/configure`, set your owner password, paste your keys into the form, hit save. Then install into Stremio with one click or via manifest link. ([Stremio guide](#installing-it-in-stremio)) | Browser + Stremio |
 
-## 📂 Naming and Matching Guide
+That's genuinely the whole process. If you'd rather configure things the old way with environment variables, that's still fully supported — see the [settings reference](#all-settings-reference) further down. The two play nicely together: anything saved in the wizard wins.
 
-To help the addon find your uploaded videos, name your files or write your Telegram message captions using this clean format:
+### One-time setup: Telegram API keys
+
+1. Go to [my.telegram.org](https://my.telegram.org) and log in with your phone number (international format, e.g. `+1234567890`). Telegram sends a code to your app — enter it.
+2. Click **API development tools**.
+3. Fill in **App title** and **Short name** — anything works, like `tgaddon`. Leave the rest as-is.
+4. Hit submit and copy your `api_id` and `api_hash`.
+
+Getting an error when saving? Turn off your VPN or adblocker, or try a private/incognito window. That fixes it most of the time.
+
+### One-time setup: find your channel ID
+
+The addon needs to know which channel(s) to read from.
+
+1. Create a channel in Telegram and keep it **Private** (recommended).
+2. Open [web.telegram.org](https://web.telegram.org), click your channel, and look at the browser URL. It'll look like `https://web.telegram.org/a/#-1001234567890` — that number starting with `-100` is your channel ID.
+3. Prefer a bot? Forward any message from the channel to `@username_to_id_bot` and it replies with the ID.
+
+---
+
+## Where can I deploy this?
+
+Every service below works with the one-click buttons. None of them charge you at signup unless noted.
+
+| Platform | What to expect | Deploy |
+| :--- | :--- | :--- |
+| **Render** | Free tier, no card needed. Sleeps after 15 min of inactivity (about a minute to wake). Has a 5GB/month outbound data cap — fine for testing, tight for daily use. | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/SunilRoy-dev/stremio-telegram-debrid) |
+| **Koyeb** | Free and always on (no sleeping). Needs a card check at signup, but doesn't charge it. | [![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&repository=github.com/SunilRoy-dev/stremio-telegram-debrid&branch=main&name=stremio-telegram-debrid) |
+| **Hugging Face Spaces** | Docker Spaces now require a **paid PRO plan** — this used to be free, but not anymore. | [Setup guide](#hugging-face-spaces) |
+| **Railway** | Trial credits (roughly 500 hours of runtime), then it stops until you upgrade. | [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/SunilRoy-dev/stremio-telegram-debrid) |
+| **Zeabur** | Trial credits, similar story to Railway. | [![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/templates/deploy?template=https://github.com/SunilRoy-dev/stremio-telegram-debrid) |
+| **Heroku** | Paid from $5/month, but rock solid, fast, and always on. | [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy/?template=https://github.com/SunilRoy-dev/stremio-telegram-debrid) |
+| **Google Colab** | Free but temporary. Great for trying it out; shuts down after a few hours. | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/SunilRoy-dev/stremio-telegram-debrid/blob/beta/deployment/colab/deploy_colab.ipynb) |
+
+**Honest advice:** streaming is a bandwidth-hungry activity — one 1080p video uses roughly 1–2GB of outbound data. Free tiers with small monthly caps will run out quickly with regular watching. For a personal addon used by one or two people: start with Render (easiest, just know the 5GB cap), use Koyeb if you don't mind the card check (always on, no cap surprise), and go Heroku if you want zero drama and don't mind $5. More detail on each platform [further down](#deployment-platform-details).
+
+## What it can do
+
+Grouped by the stuff you'd actually care about, not the order I wrote the code in.
+
+### Your library inside Stremio
+
+**Catalog rows on the home screen.** The addon registers dedicated catalogs for your video collections alongside Continue Watching rows. Only real video files are listed — subtitle and audio files that happen to sit in the channel are filtered out automatically, so you never get a stray `.srt` file cluttering your video catalogs.
+
+**Genre rows.** The addon advertises the standard genres (Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Family, Fantasy, History, Horror, Music, Mystery, Romance, Science Fiction, Thriller, War, Western). Once your files are matched to their titles, Stremio's home page fills up with genre-filtered rows for your library.
+
+**Multi-part and episodic videos grouped properly.** Files like `Video S01E01.mkv`, `Video S01E02.mkv` or `Video Part 1.mp4` become one entry with an organized episode and part list. If the same part exists in multiple releases or qualities, the highest quality file wins (usually the better one). Split parts are stitched together automatically.
+
+**Real posters and details.** Every item gets a poster, a description, a year and genres. With a free [TMDB API key](https://www.themoviedb.org/settings/api) you get the best results, including titles and posters in your own language via `TMDB_LANGUAGE` — for example `hi-IN` for Hindi or `es-ES` for Spanish. Without a key it falls back to Stremio's built-in Cinemeta, which works fine but stays in English. Either way, results are cached for 7 days so catalogs load fast and the metadata service isn't hammered.
+
+### Playback
+
+**Split files become one continuous video.** Telegram caps uploads at 2GB (regular accounts) or 4GB (Premium), so long videos often get uploaded in chunks — `Video.mkv.001`, `Video.mkv.002`, `Video.part1.rar`, `Video_part_1.mp4` and friends. The addon recognizes these patterns and stitches the parts back into a single continuous stream. Seeking works across part boundaries. It behaves well with standard formats in Stremio's player, and split detection is fully automatic. More detail [below](#split-file-playback).
+
+**Instant seeking.** Full range request support end to end (HTTP 206). Scrub around in Stremio, VLC or MPV without waiting for anything to load.
+
+**Stream links that don't die mid-video.** Telegram links expire after a few hours. If your stream stalls because the link went stale, the addon quietly fetches a fresh one and playback continues.
+
+**Subtitles picked up automatically.** Drop `.srt`, `.vtt` or `.ass` files next to your videos in the channel and they appear in Stremio's subtitle menu. They're offered as subtitles only — never as playable items in your catalogs.
+
+**ZIP archives — possible, but I don't recommend it.** You can play videos stored inside a `.zip` (including split ones like `.zip.001` / `.zip.002`). The catch: seeking doesn't work, startup is slow, and it's heavy on the server. If you care about the details, read the [ZIP section](#zip-support-read-this-before-uploading) — otherwise, just upload files directly.
+
+### Safety and control
+
+**The `/configure` wizard.** A password-protected web page where you set up everything — Telegram keys, channels, TMDB, timezone, rate limits — from a form, with a live connection test before saving. It's described in full [in its own section](#the-configuration-wizard), because it's the part most people will use.
+
+**A cache that keeps Telegram happy.** This matters more than people think: hammering Telegram's API is how accounts end up restricted. The addon serves repeat lookups from its cache first, runs at most 2 searches at a time with a small delay between them, and backs off automatically when Telegram says "slow down" (FloodWait). The cache lives in a SQLite file, so it survives restarts instead of starting cold every time.
+
+**Rate limiting you control.** Off by default — your personal instance, your call. If you ever share the addon link with a group, turn it on (one checkbox in the wizard or `RATE_LIMIT_ENABLED=true`) and each visitor gets their own budget: 120 API requests per minute and 600 media range requests per minute (deliberately generous so normal playback never trips it). Exceeding it returns a clean "slow down" response instead of choking the server.
+
+**Watch history.** Every stream gets start, seek and stop events recorded. A session that sits idle for 10 minutes is treated as stopped. Anything between roughly 1% and 95% watched shows up in the Continue Watching rows, with progress and play counts. For episodic videos, the entry links back to the collection's part list with the last-watched item noted.
+
+**Play logs in Telegram (optional).** Set `LOG_CHANNEL_ID` (or fill it in the wizard) and a channel of your choice receives a message for every playback event — with the file name, your region's date and time (from `TIMEZONE`), the year, and how many times that file has been played in total. Example:
 
 ```text
-[File Name] [Season/Episode Info] [Extra Tags].extension
+🟢 Playback Started
+📁 File: `Video.2023.1080p.mkv`
+📅 Date & Time: `2026-09-25 21:45:10` (Asia/Kolkata)
+📆 Year: `2026`
+🔁 Play Count: `1`
+💬 Source Channel: `-1001234567890`
+🆔 Message ID: `42`
 ```
 
-### Simple Rules to Follow:
-
-1. **Put Details in Filename or Caption**:
-   - You can put your video title and episode details in the **file name**, the **message caption**, or **both**. The addon checks both to find your files!
-2. **Easy Season & Episode Format**:
-   - Write season and episode numbers in whatever format you prefer. Supported styles include:
-     * **Standard**: `S01E01`, `s1e1`, `s01.e01`, `1x01`, `01x01`, `1x1`
-     * **Text**: `Season 1 Episode 1`, `Temporada 1 Capitulo 1` (Spanish and other languages supported!)
-     * **Episode Only**: `Ep 12`, `capitulo 12`, `[12]`, `- 12 -` (defaults to Season 1)
-3. **Direct Video Messages Work Automatically**:
-   - Videos posted directly to your Telegram channel work automatically, even if they don't have a `.mp4` or `.mkv` extension in their name.
-4. **Extra Details at the End**:
-   - Put extra details like resolution or audio at the end (for example: `My Video S01E02 [1080p] [Dual-Audio].mkv`).
+Seek, stop and finish events get logged the same way, including progress. Not interested? `WATCH_LOG_EVENTS=false` turns the whole thing off.
 
 ---
 
-## System Architecture
+## The configuration wizard
 
-The diagram below shows how the addon behaves as a range-supported streaming proxy between Stremio and Telegram:
+This is the part designed for people who don't want to touch config files, and it replaces the old "edit a dozen environment variables" ritual.
 
-```mermaid
-graph TD
-    User([Stremio Player]) -->|1. Stream Request with Range Header| Addon[FastAPI Addon Server]
-    Addon -->|2. Check Cache / Fetch Message| TGClient[Pyrogram Client]
-    TGClient -->|3. Get Media Stream Block| TGDC[Telegram Data Center]
-    TGDC -->|4. Return Media Bytes| TGClient
-    TGClient -->|5. Forward Bytes Chunk-by-Chunk| Addon
-    Addon -->|6. Return HTTP 206 Partial Content| User
-    
-    subgraph Hosting Environment
-        Addon
-        TGClient
-    end
-    
-    subgraph Telegram Network
-        TGDC
-    end
-```
+**How it works:**
 
----
+1. Deploy the addon with no configuration at all. Yes, really — nothing is required up front.
+2. Open `https://your-deployed-url/configure` in a browser.
+3. **On first visit** the page asks you to *claim* it by setting an owner password. From that moment on, only that password opens the page. Anyone else who stumbles on the URL sees a lock screen, nothing more.
+4. Fill in the form: API ID and Hash, your session string (or bot token), your channel IDs, and whatever optional extras you want — TMDB key and language, log channel, timezone, the manifest password (`API_KEY`), rate limit toggle, search cache duration.
+5. Hit **Test Telegram connection**. It checks your credentials against Telegram for real and tells you who you're logged in as. Takes about 15 seconds.
+6. Hit **Save & apply**. The settings are validated, written to `data/config.json`, and the Telegram client restarts with the new values — no redeploy, no rebuild, no waiting.
 
-## Configuration Environment Variables
+The page also shows cache stats and has a **Clear persistent cache** button for when you want a clean slate, plus a logout button for shared computers.
 
-Configure these settings in your deployment dashboard or local `.env` file:
-
-| Variable | Required | Description |
-| :--- | :---: | :--- |
-| `API_ID` | **Yes** | Your Telegram API ID from [my.telegram.org](https://my.telegram.org). |
-| `API_HASH` | **Yes** | Your Telegram API Hash from [my.telegram.org](https://my.telegram.org). |
-| `TELEGRAM_CHANNEL_ID` | **Yes** | Comma-separated list of private/public channel IDs or usernames (e.g. -1001234567890, @my_channel). |
-| `BOT_TOKEN` | **Conditional** | Bot Token from `@BotFather` (required if `USER_SESSION_STRING` is not configured). |
-| `USER_SESSION_STRING` | **Conditional** | Pyrogram Session String (highly recommended to bypass bot limits, see details below). |
-| `API_KEY` | No | Add a secret key (e.g. `mykey123`) to secure your addon endpoint with `?api_key=mykey123`. |
-| `ADDON_URL` | **Yes** | The public HTTP URL where your server is deployed (e.g. `https://myaddon.onrender.com`). |
-| `LOG_CHANNEL_ID` | No | Telegram channel ID where play/stream logs are recorded. |
-| `TIMEZONE` | No | Timezone for logs (e.g., `Asia/Kolkata`, `UTC+05:30`). Defaults to `UTC`. |
-| `CACHE_TTL` | No | Cache duration in seconds for searches (default: `1800` [30 mins]). |
-
----
-
-## Telegram Credentials: Bot vs. User Sessions
-
-You can run this addon using either a standard Telegram Bot Token or a Pyrogram User Session String.
+> [!TIP]
+> **Uploaded new videos to your channel?** Telegram search results are cached for 30 minutes (`CACHE_TTL=1800`) to keep requests fast and prevent Telegram rate limits. If you uploaded new files and want them to appear in Stremio right away, simply click **Clear persistent cache** in the wizard.
 
 > [!IMPORTANT]
-> **We highly recommend using a User Session (`USER_SESSION_STRING`) instead of a Bot Token.**
-> Telegram Bots have strict download limitations, a strict file size limit (2GB maximum), and are easily rate-limited. This means bot-based streaming **may fail to load large files and might not work consistently**. Setting up a User Session string bypasses these limits, allows streaming files up to 4GB, provides faster download speeds, and offers a much more stable connection.
+> **Claim the wizard yourself, right after deploying.** If you deploy without setting `CONFIG_PASSWORD`, the *first person* who opens `/configure` gets to claim it. On a private instance that's you anyway — just don't leave a public URL unclaimed for hours. If you'd rather be safe from the start, set `CONFIG_PASSWORD` as an env var and the claim step is skipped entirely.
 
-Review the differences below:
+A few things worth knowing:
 
-### 1. Telegram Bot (Bot Token)
-- **Limitations**: Telegram enforces a strict **2GB size limit** on all bot file transfers. Any backup file in your channel larger than 2GB **will fail to stream**. Connection rates are heavily throttled by Telegram DCs.
-- **Setup**: Must add the bot as an **Administrator** in your private channel so it has permissions to search and read messages.
+- Passwords are stored hashed, never in plain text.
+- Anything saved in the wizard overrides the same setting from env vars. Env vars still work as fallback for anything the wizard hasn't set.
+- Wizard login sessions expire when the addon restarts. Annoying after a platform redeploys, but safer.
 
-### 2. User Client (User Session String)
-- **Benefits**: Completely bypasses bot limits, allowing you to stream files up to **4GB** (the maximum size for standard Telegram accounts) with fast, unrestricted download speeds.
-- **Setup**: Needs only standard member access to your channels.
+---
+
+## Split file playback
+
+If Telegram's 2GB/4GB upload cap forced you to upload a long video in parts, the addon puts it back together at play time. You don't configure anything — it recognizes the patterns on its own:
+
+- **Numbered extensions:** `Video.mkv.001`, `Video.mkv.002`, `Video.mkv.003`...
+- **Part indicators:** `Video.part1.rar`, `Video.part2.rar`... (also `.part01.mkv`, `.part02.mkv`...)
+- **Suffix separators:** `Video_part_1.mp4`, `Video_part_2.mp4`...
+
+What happens under the hood: the parts are grouped into one item with their combined size (say, `6.2 GB`), and when you press play, the addon maps each byte range of your player's request onto the right part. It only downloads the segments needed at each moment and hands over from one part to the next in memory, so playback doesn't stop at the 2GB mark.
+
+> [!NOTE]
+> This one's an early-stage feature. It works well for typical `.mp4`/`.mkv` files, but if a player does something unusual with ranges, results can vary. If a split file misbehaves, tell me which player and which format — it genuinely helps.
+
+---
+
+## ZIP support (read this before uploading)
 
 > [!CAUTION]
-> **Security Warning regarding `USER_SESSION_STRING`**
-> A Pyrogram User Session String grants **complete access** to your Telegram account. Anyone who acquires this string can read, write, or delete messages in your personal chats and channels.
-> - **Never** hardcode this string in files or push it to public repositories.
-> - **Only** enter it as a secure secret environment variable on trusted hosting platforms (Render, Koyeb, Railway, etc.).
-> - **Always** generate the session string on your trusted local computer.
+> **ZIP playback can't seek.** To skip to minute 40 of a video inside a ZIP, the server has to download and unpack everything from the start to that point. For big files that takes so long your player gives up first. Startup is slow too. If seeking matters — and it does for most people — upload your videos **directly** as `.mp4`, `.mkv` etc., or as split video parts. ZIPs are a last resort.
 
-### How to Generate 'USER_SESSION_STRING' Locally
+That said, if you already have ZIPs in the channel: the addon opens them, lists the video files inside as playable items, and streams them. Split ZIPs (`.zip.001`, `.zip.002`) work as well. Just know the limitations above before you wonder why the scrub bar isn't cooperating.
 
-Run the following command in your terminal to safely generate and export your session string:
+---
+
+## Naming and matching guide
+
+The addon finds your files by reading file names and message captions. The cleaner the name, the better the matching.
+
+```text
+[Title] [Part/Episode info] [Extra tags].extension
+```
+
+**Rules of thumb:**
+
+1. **Title and part details can go in the file name, the caption, or both.** The addon reads all of them.
+2. **Numbering and part formats are flexible.** `S01E01`, `s1e1`, `1x01`, `Season 1 Episode 1`, `Part 1`, `Temporada 1 Capitulo 1` (Spanish and other languages work), `Ep 12`, `capitulo 12`, `[12]`, `- 12 -` — all work. Standalone part numbers are grouped together automatically.
+3. **Videos sent directly as Telegram video messages work too**, even without an extension in the name.
+4. **Put extras at the end:** resolution, audio tags and the like — e.g. `Video_Title_S01E02_[1080p]_[Dual-Audio].mkv`.
+
+## Telegram credentials: bot token vs. user session
+
+The addon can log into Telegram two ways, and the difference matters a lot for streaming. my advice is to use both bot token and user session for best experience.  
+
+> [!IMPORTANT]
+> **Use a user session string if you can.** Bots are limited to 2GB files, get throttled hard by Telegram, and are generally flaky for streaming large files. A user session handles files up to 4GB, downloads faster, and is far more stable. It's what I use personally.
+
+**Bot token** — what it is: a token from [@BotFather](https://t.me/BotFather). The catch: Telegram enforces a hard 2GB limit on bot downloads, and connection rates are throttled. Files over 2GB simply won't stream. Setup: the bot must be an **administrator** of your channel so it can read messages.
+
+**User session** — what it is: a string that represents your own Telegram account login. The upside: no 2GB wall (up to 4GB), faster speeds, no throttling drama. Setup: your account just needs to be a member of the channel. No admin rights needed.
+
+> [!CAUTION]
+> **Treat your session string like a password to your whole Telegram account.** Anyone holding it can read and write your chats.
+> - Never paste it into files, screenshots, or public repos.
+> - Only enter it as a secret on your hosting platform, or into the wizard over HTTPS.
+> - Generate it yourself, on your own device, using the scripts below.
+
+### How to generate USER_SESSION_STRING on your computer
+
+Run this in a terminal (Python installed, `pip install pyrogram tgcrypto` done once):
 
 ```bash
 python -c "
@@ -272,349 +255,202 @@ asyncio.run(run())
 "
 ```
 
-### How to Generate 'USER_SESSION_STRING' on Mobile (No Computer Needed)
+Enter your API ID, API Hash, phone number and the login code Telegram sends you. Then copy the printed string.
 
-If you do not have a computer, you can safely generate your session string directly on your mobile phone:
+### How to generate USER_SESSION_STRING on your phone
 
-#### Option A: Android (using Pydroid 3 App - Easiest & 100% Offline)
-1. Install **Pydroid 3 - IDE for Python 3** from the Google Play Store.
-2. Open the app, tap the menu (three lines in top-left), select **Pip**, search for `pyrogram tgcrypto`, and tap **Install**.
-3. Go back to the main editor screen and paste the following Python script:
-   ```python
-   import asyncio
-   from pyrogram import Client
-   api_id = int(input('API ID: '))
-   api_hash = input('API HASH: ')
-   async def main():
-       async with Client('temp_session', api_id, api_hash) as app:
-           print('\nYour USER_SESSION_STRING is:\n')
-           print(await app.export_session_string())
-   asyncio.run(main())
-   ```
-4. Tap the yellow **Play** button. A terminal window will open—enter your API ID, API Hash, phone number (with country code, e.g. +1234567890), and the login code sent to your Telegram app.
-5. Copy the generated string from the screen.
+**Option A — Android with Pydroid 3 (works offline):**
 
-#### Option B: Web Browser (using Google Colab - No App Install Needed)
+1. Install **Pydroid 3 - IDE for Python 3** from the Play Store.
+2. In the app menu, open **Pip**, search for `pyrogram tgcrypto`, install.
+3. Paste this into the editor:
 
-Use our prebuilt Google Colab notebook to generate your session string easily in your mobile or desktop browser:
+```python
+import asyncio
+from pyrogram import Client
+api_id = int(input('API ID: '))
+api_hash = input('API HASH: ')
+async def main():
+    async with Client('temp_session', api_id, api_hash) as app:
+        print('\nYour USER_SESSION_STRING is:\n')
+        print(await app.export_session_string())
+asyncio.run(main())
+```
+
+4. Tap the play button and answer the prompts (API ID, API Hash, phone number, login code).
+5. Copy the string from the output.
+
+**Option B — any phone or PC, straight in the browser (Google Colab):**
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/SunilRoy-dev/stremio-telegram-debrid/blob/beta/deployment/colab/generate_session.ipynb)
 
-1. Click the button above to open the generator notebook.
-2. Type your `API_ID` and `API_HASH` in the form fields.
-3. Click the Play button next to **Step 1** to install dependencies, and then **Step 2** to run the generator.
-4. Input your phone number (including country code) and the verification code sent to your Telegram app.
-5. Copy the generated string completely.
+Open the notebook, fill in your `API_ID` and `API_HASH`, run both steps, log in with the code Telegram sends, and copy the string. Nothing gets installed on your device.
 
 ---
 
-## Configuring Telegram Channels
+## Configuring your channels
 
-You can index media from multiple channels at once.
+Multiple channels work fine — separate them with commas.
 
-### Channel Formats in `TELEGRAM_CHANNEL_ID`
-* **Private Channels**: Use their negative 13-digit IDs (e.g., `-1001234567890`). See the [setup guide](#2-how-to-set-up-your-private-channel--find-its-id) above on how to find this.
-* **Public Channels**: Use the username with or without the `@` symbol (e.g., `@my_public_channel` or `my_public_channel`).
-* **Multiple Channels**: Separate them with commas (e.g., `TELEGRAM_CHANNEL_ID=-1001234567890, @my_channel, another_public_channel`).
+- **Private channels:** use their numeric IDs, e.g. `-1001234567890` (see [how to find it](#one-time-setup-find-your-channel-id)).
+- **Public channels:** username with or without `@`, e.g. `@my_channel`.
+- **Multiple channels:** `-1001234567890, @my_public_channel, another_one`.
 
-### Access Requirements
-* **If using a Bot (`BOT_TOKEN`)**: Add the bot to your private channels as an administrator so it has permission to search and read messages.
-* **If using a User Session (`USER_SESSION_STRING`)**: Your Telegram account must simply be joined or subscribed to the channels.
+Access rules: with a **bot token**, the bot must be an admin in each private channel. With a **user session**, your account just needs to be joined to the channel.
 
-### Performance Tip
-Try to limit the configuration to **5 to 10 channels max**. The addon queries channels sequentially, and searching too many channels might cause Stremio to time out (which expects a response within 3-5 seconds) or trigger Telegram rate limits (`FloodWait` errors).
+**Performance tip:** keep it to 5–10 channels max. Searches run channel by channel, and Stremio gives the addon only a few seconds to respond before it gives up. More channels = slower responses and a grumpier Telegram.
 
 ---
 
-## Deployment Platform Specs and Limitations
+## All settings reference
 
-Read these limitations carefully to choose the hosting platform that best fits your requirements:
+You can set everything through the [wizard](#the-configuration-wizard) and skip this table entirely. But if you prefer env vars (or want both), here's the full list:
 
-### 1. Hugging Face Spaces (Paid Docker Tier)
+| Variable | Required | What it does |
+| :--- | :---: | :--- |
+| `API_ID` | Yes* | Telegram API ID from [my.telegram.org](https://my.telegram.org). |
+| `API_HASH` | Yes* | Telegram API Hash from the same place. |
+| `TELEGRAM_CHANNEL_ID` | Yes* | Channel IDs / usernames, comma-separated. |
+| `USER_SESSION_STRING` | — | User session string. Recommended over a bot token. |
+| `BOT_TOKEN` | — | Bot token from @BotFather. Use this *or* a session string (session wins). |
+| `ADDON_URL` | Yes* | Public URL of your deployed app, e.g. `https://myaddon.onrender.com`. |
+| `API_KEY` | No | Extra password for the manifest URL (`https://your-domain/YOUR_KEY/manifest.json`) so strangers can't use your addon. |
+| `CONFIG_PASSWORD` | No | Password for the `/configure` wizard. If unset, the first visitor claims it. |
+| `LOG_CHANNEL_ID` | No | Channel that receives play/seek/stop log messages. |
+| `TIMEZONE` | No | Timezone for log timestamps, e.g. `Asia/Kolkata`. Defaults to `UTC`. |
+| `WATCH_LOG_EVENTS` | No | Record watch events (default `true`). `false` disables logging and Continue Watching. |
+| `TMDB_API_KEY` | No | Free key from [themoviedb.org](https://www.themoviedb.org/settings/api) for posters, genres and localized titles. Falls back to Cinemeta. |
+| `TMDB_LANGUAGE` | No | Language code for TMDB results (`language=` param), e.g. `hi-IN`, `es-ES`. Defaults to `en-US`. |
+| `RATE_LIMIT_ENABLED` | No | `true`/`false`. Turn on when sharing the instance publicly. Defaults to `false`. |
+| `RATE_LIMIT_REQUESTS` | No | API requests per window per IP (default `120`). |
+| `RATE_LIMIT_WINDOW` | No | Rate limit window in seconds (default `60`). |
+| `RATE_LIMIT_STREAM_REQUESTS` | No | Media range requests per window per IP (default `600`). |
+| `CACHE_TTL` | No | Search cache duration in seconds (default `1800` = 30 minutes). |
+| `DATA_DIR` | No | Where the SQLite cache and wizard config live (default `./data`). Mount it as a volume to survive restarts. |
+| `PORT` | No | Server port (default `7860`). |
+| `AUTO_UPDATE` | No | `true`/`false` (Docker/Spaces). Automatically pulls the latest code on container restart. |
+| `GITHUB_REPO_URL` | No | Custom fork URL to pull from when `AUTO_UPDATE=true`. |
+
+*\* — "required" only if you skip the wizard. Configure via `/configure` and none of these are needed.*
+
+---
+
+## Deployment platform details
+
+The details behind the table above, so you can pick with open eyes.
+
+### Render
+
+Free hobby tier, no card at signup. Two things to know: **sleep** and **bandwidth**. The container sleeps after 15 minutes idle and takes about a minute to wake — Stremio may show a connection error on that first play, just wait and retry. More importantly, free web services get a **5GB/month outbound cap**. When it's exhausted, the service pauses until the next month. For occasional personal use it works; for daily watching you'll hit the wall.
+
+### Koyeb
+
+Free tier, always on, no sleep — but card verification at signup (nothing gets charged). One free service per account. If you want a free instance that behaves like a real server, this is the one.
+
+### Hugging Face Spaces
 
 > [!WARNING]
-> **Hugging Face has changed its free tier policies.**
-> Deploying custom Docker containers on Hugging Face Spaces now requires a **paid PRO subscription** or paid compute resources. The free tier only supports Gradio, Streamlit, and static HTML templates. If you wish to use Hugging Face, you must upgrade your account.
+> Docker Spaces now require a **paid PRO subscription**. The free tier only supports Gradio/Streamlit/static templates, so this is no longer the free home it used to be. Also note Hugging Face enforces its content rules aggressively on public Spaces, and video streaming tends to get flagged quickly.
 
-* **Drawbacks & Security Warnings**:
-  - **Paid / PRO account required**: You must have a paid account to deploy the Dockerfile configuration of this addon.
-  - **Generous Bandwidth**: Hugging Face does not enforce a rigid monthly bandwidth quota on running Spaces.
-  - **Public Repos Option**: If your Space is public, **never upload your `.env` file to the files section**. Instead, add your configuration keys in your Space **Settings > Variables and Secrets** as secrets.
-  - **⚠️ Illegal Activity Termination Policy**: Hugging Face strictly enforces its Acceptable Use Policy. Hosting copyrighted or unauthorized media files for public streaming will lead to **immediate Space deletion, permanent account termination, and potential legal notices/liability** from content owners. Only stream video files you legally own or have permission to access.
-  - **Auto-Sleep**: Free/Hobby containers auto-sleep after **48 hours** of inactivity. However, they wake up within **10-15 seconds** of a new request.
+If you do have PRO, setup is simple: fork this repo, create a Space with the **Docker** SDK, upload the files (or set up auto-update), add `ADDON_URL` as a secret and configure the rest in the wizard. Public or private Space, keep secrets in **Settings → Variables and secrets**, never in files. `AUTO_UPDATE=true` + `GITHUB_REPO_URL=<your fork>` makes the Space pull your latest code on every restart, which is handy for updates.
 
-#### Hugging Face Spaces Setup Guide
+### Railway
 
-The addon can be deployed on Hugging Face Spaces in less than 5 minutes. You can also configure it to **automatically update** whenever new fixes are pushed to GitHub!
+Trial credits worth about 500 hours of runtime per month. When the credits run out, the service stops until you upgrade to a developer plan (card required, usage-based billing).
 
-1. **Fork this Repository**: 
-   - Click the **Fork** button at the top-right of this GitHub page to copy it to your own GitHub account.
-2. **Create a Hugging Face Account**: 
-   - Visit [Hugging Face](https://huggingface.co/) and sign up for a free account.
-3. **Create a New Space**: 
-   - Go to [huggingface.co/new-space](https://huggingface.co/new-space).
-   - **Space Name**: Choose any name (e.g., 'stremio-telegram-addon').
-   - **Space SDK**: Select **Docker**.
-   - **Template**: Select **Blank**.
-   - **Space Visibility**: Make sure it is set to **Public** (required for the free tier).
-   - Click **Create Space** at the bottom.
-4. **Upload Your Code to the Space**:
-   - Go to your new Space page and click the **Files** tab at the top.
-   - Click **+ Add file** > **Upload files**.
-   - On your GitHub fork, click the green **Code** button and select **Download ZIP**. Extract the ZIP on your device.
-   - Upload all the extracted files into the upload area on Hugging Face. Make sure 'Dockerfile', 'addon.py', 'requirements.txt', and all other project files are uploaded to the root of the Space (not inside a subfolder).
-   - Click **Commit changes to main**. Hugging Face will automatically start building and deploying your Space!
-5. **Configure Environment Secrets**: 
-   - Click the **Settings** tab at the top of your Space page.
-   - Scroll down to **Variables and secrets** and click **New secret** to add your settings:
-     - 'API_ID' (from my.telegram.org)
-     - 'API_HASH' (from my.telegram.org)
-     - 'BOT_TOKEN' (or 'USER_SESSION_STRING')
-     - 'TELEGRAM_CHANNEL_ID'
-     - 'API_KEY' (a password of your choice to protect your addon link)
-     - 'ADDON_URL': Set this to 'https://<your-hf-username>-<your-space-name>.hf.space' (you can find this URL by clicking "Embed this Space" in the top-right of your Space page).
-     - 'AUTO_UPDATE': (Optional) Set to 'true' if you want the Space to automatically download the latest version of the code from GitHub on startup. Set to 'false' or leave it unset to use the static uploaded files.
-     - 'GITHUB_REPO_URL': (Optional) If you set 'AUTO_UPDATE' to 'true' and want to pull from your own custom GitHub fork, enter your fork URL here (e.g., 'https://github.com/yourusername/stremio-telegram-debrid.git').
-6. **How to Update in the Future**:
-   - If you set 'AUTO_UPDATE' to 'true', you never have to re-upload files when new updates are released! Simply go to your Space **Settings** tab and click **Restart Space** (or **Factory Restart**), and it will automatically pull the latest code on startup.
-   - If 'AUTO_UPDATE' is unset or 'false', you will need to manually re-upload updated files to the Space.
+### Zeabur
 
-Once the status bar at the top turns green and says **Running**, your addon is online!
+Same idea as Railway — trial credits, then it stops. Fine for a short test.
 
-### 2. Render
-- **Cost**: Hobby/Free Tier. No credit card required at signup.
-- **Drawbacks**: 
-  - **⚠️ Bandwidth Limit (Strict 5GB/Month Outbound Limit)**: Render imposes a strict **5 GB limit** of free outbound bandwidth per month for web service apps (unlike static sites which get 100GB). Since video streaming is data-intensive, **you will hit this 5GB limit almost immediately**. If you exceed it without a credit card/billing configured, **Render will temporarily deactivate your service addon** (it will not ban your personal Render billing account, but the streaming proxy will stop working until the next billing cycle starts or you upgrade).
-  - **Auto-Sleep**: The container spins down/goes to sleep after **15 minutes of inactivity**. If you haven't used Stremio for a while, opening a video will trigger a wakeup request. The container will take **1 to 2 minutes** to build/spin up, causing Stremio to show a connection error initially. Simply wait 60 seconds and try playing again.
+### Heroku
 
-### 3. Koyeb
-- **Cost**: Free Tier. **Requires card verification at signup** (even though you won't be charged).
-- **Drawbacks**:
-  - The container stays continuously active (no auto-sleep), but you must verify your identity with a valid credit card during registration.
-  - Limited to 1 free service per organization.
+Paid (Eco dynos from $5/month), but the most "deploy and forget" option: always on, fast, no sleep, no caps to think about. Use the deploy button above, or the [Colab deployer notebook](https://colab.research.google.com/github/SunilRoy-dev/stremio-telegram-debrid/blob/beta/deployment/colab/deploy_heroku.ipynb) if you want to do it from a browser form.
 
-### 4. Railway
-- **Cost**: Trial Tier. Provides $5 free credits (approx. 500 hours of continuous runtime per month).
-- **Drawbacks**:
-  - The service will run out of hours and stop working before the end of the month unless you upgrade to a developer account (which requires a card and charges on usage).
+### Google Colab (temporary runs)
 
-### 5. Zeabur
-- **Cost**: Trial Tier. Limited credits.
-- **Drawbacks**:
-  - Similar to Railway, has a limited free trial tier or resource caps.
-
-### 6. Heroku
-- **Cost**: Paid / Eco Dynos (starts at $5/month).
-- **Benefits**:
-  - Extremely reliable, high-speed, and continuously active connection (no auto-sleep or startup lags).
-  - Perfect for users who want a dedicated, always-on private streaming proxy.
-- **Easy Deploy Options**:
-  - **One-Click Deploy Button**: Use the deploy button in the platform table above to open the Heroku dashboard, fill in your environment variables, and build the app instantly.
-  - **Google Colab Notebook Deployer**: You can also use our prebuilt Colab notebook to configure and deploy the app directly from your web browser:
-    
-    [![Deploy via Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/SunilRoy-dev/stremio-telegram-debrid/blob/beta/deployment/colab/deploy_heroku.ipynb)
-
-### 7. Google Colab (Run Addon Temporarily)
-- **Cost**: Free Tier. Requires a free account on [ngrok.com](https://ngrok.com) to get a tunnel token.
-- **Drawbacks**:
-  - **Temporary Runtime Only**: Google Colab containers shut down after a few hours of inactivity or once you close your browser tab. This is not suitable for a 24/7 permanent deployment, but is perfect for testing or temporary streaming.
-- **Setup Guide**:
-  1. Click the **Open In Colab** badge in the table above to open our deployment notebook.
-  2. Run the **Setup** cell to clone the code and install dependencies.
-  3. Fill in your credentials and paste your Ngrok Authtoken in the **Inputs** form.
-  4. Run the **Start Server** cell. Copy the generated public Ngrok URL and paste it into Stremio!
+Free and surprisingly useful for testing. Install dependencies and run the server in the notebook, expose it via an ngrok tunnel (free [ngrok](https://ngrok.com) account for a token), and paste the URL into Stremio. The container dies after a few hours or when you close the tab, so it's a demo environment, not a home.
 
 ---
 
-## Local Installation & Setup
+## Run it on your own machine
 
-### Prerequisites
-- Python 3.10 or higher.
-- System compiler tools (for Pyrogram C extensions - `tgcrypto`):
-  - **Windows**: Build Tools for Visual Studio.
-  - **Linux**: `build-essential libssl-dev python3-dev`
-  - **macOS**: Xcode Command Line Tools.
+**With Python (3.10+):**
 
-### Option A: Python Setup
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/SunilRoy-dev/stremio-telegram-debrid.git
-   cd stremio-telegram-debrid
-   ```
-2. Create a virtual environment and activate it:
-   ```bash
-   python -m venv .venv
-   # Windows:
-   .venv\Scripts\activate
-   # Linux/macOS:
-   source .venv/bin/activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt tgcrypto
-   ```
-4. Create a `.env` file in the root folder using your credentials (refer to the [Configuration Variables](#configuration-environment-variables) section).
-5. Run the server:
-   ```bash
-   python addon.py
-   ```
-   The landing configuration page will be accessible at `http://localhost:7860`.
+```bash
+git clone https://github.com/SunilRoy-dev/stremio-telegram-debrid.git
+cd stremio-telegram-debrid
+python -m venv .venv
+# Windows: .venv\Scripts\activate   |   Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt
+python addon.py
+```
 
-### Option B: Docker Compose
-Build and start the container using Docker Compose:
+Then open `http://localhost:7860` (or better: `http://localhost:7860/configure`) and set things up. For Stremio to reach a local server from other devices, you'll need a tunnel (ngrok, cloudflared) or to keep everything on one device.
+
+**With Docker Compose:**
+
 ```bash
 docker-compose up --build
 ```
 
-### Option C: Self-Hosting on VPS (Viren070's Docker Template)
+The `data/` folder is mounted as a volume, so your cache and wizard config survive container rebuilds.
 
-If you self-host your addons using [Viren070/docker-compose-template](https://github.com/Viren070/docker-compose-template), you can deploy this addon in 3 simple steps:
+**On a VPS with Traefik (Viren070's template):** if you run [Viren070/docker-compose-template](https://github.com/Viren070/docker-compose-template), drop in the pre-made compose file:
 
-#### Step 1: Create the App Folder and Files
-On your VPS, navigate to your cloned `docker-compose-template` directory (typically `/opt/docker`) and run the following command to create the directory and download our pre-configured `compose.yaml`:
 ```bash
 mkdir -p apps/stremio-telegram-debrid
 curl -s https://raw.githubusercontent.com/SunilRoy-dev/stremio-telegram-debrid/main/deployment/vps/compose.yaml -o apps/stremio-telegram-debrid/compose.yaml
 ```
 
-Or you can create the file `apps/stremio-telegram-debrid/compose.yaml` manually with the following configuration:
-```yaml
-services:
-  stremio-telegram-debrid:
-    container_name: stremio-telegram-debrid
-    image: ghcr.io/sunilroy-dev/stremio-telegram-debrid:latest
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      - PORT=7860
-    profiles:
-      - stremio-telegram-debrid
-      - debrid
-      - addon
-    networks:
-      - traefik
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.stremio-telegram-debrid.rule=Host('stremio-tg.${DOMAIN}')"
-      - "traefik.http.routers.stremio-telegram-debrid.entrypoints=websecure"
-      - "traefik.http.routers.stremio-telegram-debrid.tls.certresolver=letsencrypt"
-      - "traefik.http.services.stremio-telegram-debrid.loadbalancer.server.port=7860"
+Then add `- apps/stremio-telegram-debrid/compose.yaml` under the `include:` section of the template's root compose file, make sure `addon` is in your `COMPOSE_PROFILES`, and run `docker compose up -d`. If you already run a global Watchtower container, delete the `stremio-telegram-debrid-updater` block from the compose file to avoid running two of them.
 
-  stremio-telegram-debrid-updater:
-    container_name: stremio-telegram-debrid-updater
-    image: containrrr/watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: stremio-telegram-debrid --cleanup --interval 300
-    profiles:
-      - stremio-telegram-debrid
-      - debrid
-      - addon
+---
 
-networks:
-  traefik:
-    external: true
-```
+## Installing it in Stremio
 
-> [!TIP]
-> **Already running Watchtower?**
-> If you already have a global Watchtower container running (e.g., from Viren070's template), you can safely omit/delete the `stremio-telegram-debrid-updater` service block from your `compose.yaml` file to avoid running redundant container update processes.
+### Method A — 1-Click Install via Landing Page (Easiest)
+1. Open your deployed URL `https://your-deployed-url` in any web browser.
+2. If you set an `API_KEY`, type it into the input box on the landing page.
+3. Click **Install on Stremio** to open the Stremio desktop or mobile app directly, or click **Open in Web Stremio** if you watch from your browser.
 
-#### Step 2: Configure the App Environment Variables
-Create a file named `apps/stremio-telegram-debrid/.env`. You can download our sample `.env.example` template directly by running:
-```bash
-curl -s https://raw.githubusercontent.com/SunilRoy-dev/stremio-telegram-debrid/main/.env.example -o apps/stremio-telegram-debrid/.env
-```
-Or create it manually and configure your credentials:
-```env
-# Telegram Credentials
-API_ID=your_api_id
-API_HASH=your_api_hash
-TELEGRAM_CHANNEL_ID=-100xxxxxxxxxx
+### Method B — Manual Install
+1. Open **Stremio** (desktop, mobile or web).
+2. Go to the **Add-ons** section (puzzle piece icon).
+3. In the search bar at the top, paste your manifest URL:
+   - Without API key: `https://your-deployed-url/manifest.json`
+   - With API key: `https://your-deployed-url/YOUR_API_KEY/manifest.json` (or `https://your-deployed-url/manifest.json?api_key=YOUR_API_KEY`)
+4. Click **Install** when prompted.
+5. In Stremio, open your Discover or Home screen. Your Telegram video catalogs and Continue Watching rows will appear automatically.
+6. When playing a video matching your channel files, you'll see stream options labeled `▶ TG Play` or `▶ TG Channel` at the top of the streams panel.
 
-# Choose one: Use either User Session (recommended) or Bot Token
-USER_SESSION_STRING=your_session_string
-BOT_TOKEN=your_bot_token
-
-# Addon Settings
-API_KEY=your_addon_api_key
-ADDON_URL=https://stremio-tg.yourdomain.com
-```
-*(Replace `yourdomain.com` with your actual domain)*
-
-#### Step 3: Register and Run the Addon
-1. Open the **root `compose.yaml`** file at the root of your `docker-compose-template` directory, and add our app path under the `include:` section:
-   ```yaml
-   include:
-     # ... existing apps ...
-     - apps/stremio-telegram-debrid/compose.yaml
-   ```
-2. Open the **root `.env`** file at the root of your template, and ensure `addon` is included in your `COMPOSE_PROFILES` so it starts automatically:
-   ```env
-   COMPOSE_PROFILES=required,addon
-   ```
-3. Start the addon by running:
-   ```bash
-   docker compose up -d
-   ```
-
-
-
-## How to Install in Stremio
-
-1. Deploy the addon publicly (or run it locally with tunnel software like Ngrok).
-2. Copy your addon manifest URL (e.g., `https://your-addon-domain.com/manifest.json?api_key=mykey`).
-3. Open **Stremio** (Desktop, Mobile, or Web).
-4. Go to **Add-ons**, paste the URL into the search bar, and click **Install**.
-5. Search for your video backups in Stremio. If matching files exist in your Telegram channel, you will see the stream option labeled `▶ TG Play` or `▶ TG Channel` at the top of the streams panel!
+### Troubleshooting: Nothing shows up?
+- **Check file names:** The addon matches files by reading captions and clean names. Check the [naming guide](#naming-and-matching-guide) — e.g. `Video_Title_2023.1080p.mkv` or `Video_Title_S01E01.mkv`.
+- **Check channel ID:** Private channels must start with `-100` (e.g. `-1001234567890`). See [how to find your channel ID](#one-time-setup-find-your-channel-id).
+- **Check bot permissions:** If using a bot token instead of a user session, the bot *must* be added as an administrator in the private channel.
+- **Clear cache:** If you uploaded new files recently, click **Clear persistent cache** in `/configure` or wait for `CACHE_TTL` (default 30 mins) to expire.
+- **Check connection:** Open `/configure` and click **Test Telegram connection** to verify your credentials are alive and responding.
 
 ---
 
 ## Contributing
 
-Contributions, bug reports, and suggestions are highly welcome!
-- **Report Issues**: If you find bugs or want to request features, please open a GitHub Issue.
-- **Submit Pull Requests**: Feel free to fork the repository, make improvements, and submit a Pull Request. All pull requests will be reviewed and merged to improve the project.
+Bug reports, feature ideas and pull requests are all welcome. If something breaks, an Issue with your platform, what you played and what happened usually gets it fixed fastest.
 
----
+## Credits
 
-## Built With & Credits
+Built on top of some great open source:
 
-This project is made possible thanks to the following open-source frameworks, libraries, and APIs:
+- **[FastAPI](https://fastapi.tiangolo.com/)** and **[Uvicorn](https://www.uvicorn.org/)** — the web server doing the proxying.
+- **[Pyrogram](https://github.com/pyrogram/pyrogram)** + **[tgcrypto](https://github.com/pyrogram/tgcrypto)** — the Telegram connection and its speed.
+- **[Cinemeta](https://github.com/Stremio/stremio-cinemeta)** — Stremio's own metadata service, used as fallback.
+- **[TMDB](https://www.themoviedb.org/)** — posters, titles and genre data. This product uses the TMDB API but is not endorsed or certified by TMDB.
 
-- **[FastAPI](https://fastapi.tiangolo.com/)**: High-performance, easy-to-use Python web framework for building the addon routes.
-- **[Pyrogram](https://github.com/pyrogram/pyrogram)**: Elegant, modern, and asynchronous Telegram MTProto API framework, powering our connection to Telegram channels.
-- **[tgcrypto](https://github.com/pyrogram/tgcrypto)**: High-speed C-extension for Pyrogram cryptography requirements to ensure smooth streaming.
-- **[Uvicorn](https://www.uvicorn.org/)**: Lightning-fast ASGI web server implementation.
-- **[Cinemeta API](https://github.com/Stremio/stremio-cinemeta)**: Stremio's default metadata provider, enabling the addon to query and match filenames.
+## License
 
----
+This project is licensed under a non-commercial license — see the [LICENSE](LICENSE) file. In short: use it, modify it, self-host it as much as you like, but don't sell it, rent it out, or strip the credits. If you fork it, keeping the attribution links (footer, manifest, console banner) intact is the only real ask. If you come across someone reselling it or passing it off as their own, reporting it to the hosting platform usually gets it sorted.
 
-## License, Attribution and Stars
+## Before you deploy
 
-### MIT Non-Commercial License (MIT-NC)
-This project is licensed under a custom **MIT Non-Commercial License (MIT-NC)** - see the [LICENSE](LICENSE) file for details. Copyright (c) 2026 SunilRoy.
+This addon streams files from the Telegram channels *you* configure. Please use it with content you own or have permission to stream — what gets hosted in your channels, and who you share your addon link with, is on you. Also give the terms of your hosting platform a skim so there are no surprises.
 
-Sublicensing, commercial sale, renting, or financial/monetary exploitation of this software (including its source code and derivatives) is **strictly prohibited**.
 
-### What happens if someone violates the license or removes attribution?
-By hosting public code, you are protected by copyright laws. If someone forks or copies this repository and removes your attribution/links, sells/monetizes the software, or uses it in violation of the non-commercial terms, **you have the legal right to file a DMCA Takedown Notice**. 
-
-GitHub, Render, Koyeb, and other major platforms take copyright violations very seriously. Filing a formal DMCA notice through their portals will result in their repository, fork, or hosted service being **disabled or taken down** within 24 hours.
-
-### Attribution Requirement
-If you fork, copy, modify, or redistribute this project:
-1. You **must** keep the original credits back to [SunilRoy-dev](https://github.com/SunilRoy-dev).
-2. Do **not** remove the developed-by credits or links from the web landing page footer, manifest metadata, or startup console banner.
-3. Please **star the repository** as a sign of appreciation.
-
----
-
-## Educational Disclaimer
-
-> [!WARNING]
-> This software is created solely for **educational, personal backup, and research purposes**. The author (`SunilRoy`) does not condone, promote, or encourage copyright infringement or the unauthorized streaming/sharing of copyrighted media. 
-> - Users are solely responsible for the media files they host in their private Telegram channels.
-> - By deploying or running this software, you agree that you are using it in compliance with all local copyright laws and terms of service.

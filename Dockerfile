@@ -16,7 +16,11 @@ RUN chown user:user /app
 
 # Copy dependency specifications and install them globally
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt tgcrypto
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Persistent data (SQLite cache + wizard config) lives here - mount a volume on /app/data
+RUN mkdir -p /app/data && chown user:user /app/data
+VOLUME ["/app/data"]
 
 # Copy application files and change ownership to the non-root user
 COPY --chown=user:user . .
@@ -28,5 +32,4 @@ USER user
 EXPOSE 7860
 
 # Command to run the addon dynamically supporting optional auto-update
-CMD ["sh", "-c", "if [ \"$AUTO_UPDATE\" = \"true\" ]; then echo 'Auto-update enabled. Cloning latest code...'; git clone --depth=1 ${GITHUB_REPO_URL:-https://github.com/SunilRoy-dev/stremio-telegram-debrid.git} /tmp/app && cp -r /tmp/app/* . && rm -rf /tmp/app && pip install --no-cache-dir --user -r requirements.txt tgcrypto; fi && uvicorn addon:app --host 0.0.0.0 --port ${PORT:-7860} --timeout-keep-alive 300 --timeout-graceful-shutdown 10"]
-
+CMD ["sh", "-c", "if [ \"$AUTO_UPDATE\" = \"true\" ]; then echo 'Auto-update enabled. Cloning latest code...'; git clone --depth=1 ${GITHUB_REPO_URL:-https://github.com/SunilRoy-dev/stremio-telegram-debrid.git} /tmp/app && cp -r /tmp/app/* . && rm -rf /tmp/app && pip install --no-cache-dir --user -r requirements.txt; fi && uvicorn addon:app --host 0.0.0.0 --port ${PORT:-7860} --timeout-keep-alive 300 --timeout-graceful-shutdown 10"]
