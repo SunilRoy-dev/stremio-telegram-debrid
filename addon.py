@@ -145,7 +145,7 @@ async def _watch_session_finalizer():
                 logger.debug(f"Stop log failed: {e}")
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(wizard_router)
 
 app.add_middleware(
